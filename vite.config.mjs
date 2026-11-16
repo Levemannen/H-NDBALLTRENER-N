@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 
 export default defineConfig({
   base:'./',
+  build:{rollupOptions:{output:{manualChunks(id){if(id.endsWith('/src/bank.json'))return 'exercise-bank';}}}},
   plugins:[{
     name:'handball-offline',
     apply:'build',

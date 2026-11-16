@@ -24,10 +24,22 @@ Se [GitHubs veiledning om publiseringskilder](https://docs.github.com/en/pages/g
 
 ## Øvelsesbanken
 
-`src/bank.json` inneholder 122 nummererte hovedøvelser fra Master v3, samt partnerbanken, kjernebanken, målvakttillegget og listen over uavklarte øvelser. Seksjonene beholder tekst og rekkefølge fra kilden. Kategorifiltrene bruker kategorioversikten, og ferdighetstaggene er hentet ut fra «Hva trener vi?». Vanskelighetsgrad settes som en egen opplysning. Illustrasjonen til øvelse 16 viser varianten med fem spillere og seks kjegler.
+`src/bank.json` inneholder 122 nummererte hovedøvelser fra Master v3, samt partnerbanken, kjernebanken, målvakttillegget og listen over uavklarte øvelser. Seksjonene beholder tekst og rekkefølge fra kilden. Søk bruker både originaltekst og redaksjonelle ferdighetstagger og øvelsestyper fra `src/catalog.ts`. Søk etter spillerantall og hall krever samsvar med kjente metadata. Vanskelighetsgrad og oppgitt antall trenere kan settes som egne opplysninger.
+
+Øvelse 16 viser startposisjonene og hvordan den tomme kjegla flytter seg etter pasning og løp. Øvelse 20, 22, 66 og 72 har kildekontrollerte SVG-skisser. Bruk egne metadata eller dupliser en øvelse for å tilpasse den. Egne opplysninger og illustrasjoner lagres i brukerdata, sammen med eksisterende spillerliste og treningsøkter.
 
 Importer kilden på nytt med `./scripts/Read-Bank.ps1 -Document 'sti-til-kilden.docx'` i PowerShell. Se gjennom endringer i øvelses-ID-er før publisering, siden treningsplaner og notater refererer til disse.
 
 ## Brukerdata og sikkerhetskopi
 
 Spillerliste, notater, favoritter, illustrasjoner og lagrede økter ligger lokalt i nettleseren. Bruk **Mitt lag → Sikkerhetskopi** for å flytte data mellom nettlesere eller enheter. Import validerer formatet og ber om bekreftelse før lokale data erstattes. Oppbevar sikkerhetskopier privat.
+
+## Videre forbedringer
+
+Treningsplanen viser ledige minutter og eventuell overskridelse. Øvelser kan åpnes fra planen. Mine treninger kan filtreres på kommende og tidligere økter, og spillerlisten har søk og sortering på navn eller nivå.
+
+Halltimeren husker øvelse, pausetid og sluttidspunkt i samme nettleserfane, også etter navigasjon og ny innlasting. Tiden beregnes fra klokkeslett. Nettleseren kan begrense aktivitet i bakgrunnen. Timerstatus er midlertidig og inngår ikke i sikkerhetskopien.
+
+Fortsatt arbeid fra den komplette 2.0-bestillingen omfatter lagrede lagfordelinger med navn og bytting, evalueringer, startklokkeslett, delvis gjenbruk av økter, forslag basert på nivå og utstyr, flere treningsgrupper og en tydelig oppdateringsknapp. GitHub Actions-versjoner og publisering må også verifiseres på GitHub.
+
+Treninger støtter nå valgfri starttid, klokkeslett per øvelse, gjenbruk av enkeltøvelser fra lagrede planer og kort evaluering. Under Mitt lag kan lag få navn og lagres med oppmøte på valgt trening. Nye felt er valgfrie i det eksisterende lagringsformatet. Import avviser dupliserte spillere i lagfordeling og ugyldig starttid.

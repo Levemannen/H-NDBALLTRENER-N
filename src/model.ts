@@ -1,13 +1,14 @@
 export type Section = {label:string; lines:string[]};
-export type Exercise = {id:string; title:string; number?:number; bank?:string; unresolved?:boolean; categories:string[]; skills:string[]; meta?:string; players?:number[]; minutes?:number[]; halls?:string[]; sections:Section[]};
+export type ExerciseMeta = {categories?:string[]; skillTags?:string[]; types?:string[]; players?:number[]; minutes?:number[]; halls?:string[]; coaches?:number};
+export type Exercise = ExerciseMeta & {id:string; title:string; number?:number; bank?:string; unresolved?:boolean; categories:string[]; skills:string[]; meta?:string; sections:Section[]};
 export type Level = 1|2|3|4;
 export type Player = {id:string; name:string; level:Level};
 export type Point = {x:number;y:number};
-export type SymbolKind = 'player'|'cone'|'ball'|'goal'|'hurdle'|'empty'|'text';
-export type Diagram = {court:'full'|'half'|'crop'; marks:({id:string;kind:SymbolKind;label:string;team:0|1}&Point)[]; arrows:{id:string;kind:'run'|'pass';from:Point;to:Point;bend?:Point}[]};
+export type SymbolKind = 'player'|'keeper'|'cone'|'ball'|'goal'|'hurdle'|'mat'|'empty'|'text';
+export type Diagram = {court:'full'|'half'|'crop'; marks:({id:string;kind:SymbolKind;label:string;team:0|1}&Point)[]; arrows:{id:string;kind:'run'|'pass'|'carry';from:Point;to:Point;bend?:Point}[]};
 export type Item = {id:string; exerciseId:string; minutes:number; comment:string};
-export type Session = {id:string; name:string; date:string; duration:number; players:number; coaches:number; hall:string; focus:string; attendees:string[]; items:Item[]; template:boolean};
-export type Annotation = {note:string; variant:string; difficulty:string};
+export type Session = {startTime?:string; allocation?:{name:string;players:string[]}[]; evaluation?:{rating:string;note:string};id:string; name:string; date:string; duration:number; players:number; coaches:number; hall:string; focus:string; attendees:string[]; items:Item[]; template:boolean};
+export type Annotation = {note:string; variant:string; difficulty:string; metadata?:ExerciseMeta};
 export type Data = {version:1; team:string; players:Player[]; sessions:Session[]; favorites:string[]; notes:Record<string,Annotation>; diagrams:Record<string,Diagram>; exercises:Exercise[]};
 export const storageKey = 'handballtrenern.v1';
 export const halls = ['liten','halv','stor','gymsal'];
@@ -34,13 +35,24 @@ const strings = (v:unknown) => list(v,string);
 const record = (v:unknown,check:(x:unknown)=>boolean) => object(v) && Object.entries(v).every(([k,x])=>!['__proto__','constructor','prototype'].includes(k) && check(x));
 const key = (v:unknown) => string(v) && /^[a-zA-Z0-9-]+$/.test(v);
 const range = (v:unknown) => Array.isArray(v) && v.length===2 && v.every(x=>integer(x,1)) && v[0]<=v[1];
-const exercise = (v:unknown) => object(v) && key(v.id) && string(v.title) && strings(v.categories) && strings(v.skills) && (v.players===undefined || range(v.players)) && (v.minutes===undefined || range(v.minutes)) && (v.halls===undefined || strings(v.halls)) && list(v.sections,s=>object(s)&&string(s.label)&&strings(s.lines));
+const metadata = (v:unknown) => object(v) && ['categories','skillTags','types','halls'].every(k=>v[k]===undefined||strings(v[k])) && ['players','minutes'].every(k=>v[k]===undefined||range(v[k])) && (v.coaches===undefined||integer(v.coaches,1));
+const exercise = (v:unknown) => object(v) && metadata(v) && key(v.id) && string(v.title) && strings(v.categories) && strings(v.skills) && list(v.sections,s=>object(s)&&string(s.label)&&strings(s.lines));
 const point = (v:unknown) => object(v) && [v.x,v.y].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=100);
-const diagram = (v:unknown) => object(v) && ['full','half','crop'].includes(String(v.court)) && list(v.marks,m=>object(m)&&key(m.id)&&point(m)&&['player','cone','ball','goal','hurdle','empty','text'].includes(String(m.kind))&&string(m.label)&&(m.team===0||m.team===1)) && list(v.arrows,a=>object(a)&&key(a.id)&&['run','pass'].includes(String(a.kind))&&point(a.from)&&point(a.to)&&(a.bend===undefined||point(a.bend)));
-const session = (v:unknown) => object(v)&&key(v.id)&&string(v.name)&&string(v.date)&&/^\d{4}-\d{2}-\d{2}$/.test(v.date)&&integer(v.duration,1)&&integer(v.players)&&integer(v.coaches)&&string(v.hall)&&string(v.focus)&&strings(v.attendees)&&typeof v.template==='boolean'&&list(v.items,i=>object(i)&&key(i.id)&&key(i.exerciseId)&&integer(i.minutes,1)&&string(i.comment));
+const diagram = (v:unknown) => object(v) && ['full','half','crop'].includes(String(v.court)) && list(v.marks,m=>object(m)&&key(m.id)&&point(m)&&['player','keeper','cone','ball','goal','hurdle','mat','empty','text'].includes(String(m.kind))&&string(m.label)&&(m.team===0||m.team===1)) && list(v.arrows,a=>object(a)&&key(a.id)&&['run','pass','carry'].includes(String(a.kind))&&point(a.from)&&point(a.to)&&(a.bend===undefined||point(a.bend)));
+const sessionExtras=(v:Obj)=>{
+  if(v.startTime!==undefined&&(!string(v.startTime)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.startTime)))return false;
+  if(v.evaluation!==undefined&&(!object(v.evaluation)||!['','bra','middels','dårlig'].includes(String(v.evaluation.rating))||!string(v.evaluation.note)))return false;
+  if(v.allocation!==undefined){
+    if(!list(v.allocation,g=>object(g)&&string(g.name)&&list(g.players,key)))return false;
+    const ids=(v.allocation as {players:string[]}[]).flatMap(g=>g.players);
+    if(new Set(ids).size!==ids.length||!Array.isArray(v.attendees)||ids.some(id=>!(v.attendees as unknown[]).includes(id)))return false;
+  }
+  return true;
+};
+const session = (v:unknown) => object(v)&&sessionExtras(v)&&key(v.id)&&string(v.name)&&string(v.date)&&/^\d{4}-\d{2}-\d{2}$/.test(v.date)&&integer(v.duration,1)&&integer(v.players)&&integer(v.coaches)&&string(v.hall)&&string(v.focus)&&strings(v.attendees)&&typeof v.template==='boolean'&&list(v.items,i=>object(i)&&key(i.id)&&key(i.exerciseId)&&integer(i.minutes,1)&&string(i.comment));
 export function parseData(text:string):Data {
   const v:unknown = JSON.parse(text);
-  if (!object(v)||v.version!==1||!string(v.team)||!list(v.players,p=>object(p)&&key(p.id)&&string(p.name)&&[1,2,3,4].includes(p.level as number))||!list(v.sessions,session)||!list(v.favorites,key)||!record(v.notes,n=>object(n)&&string(n.note)&&string(n.variant)&&string(n.difficulty))||!record(v.diagrams,diagram)||!list(v.exercises,exercise)) throw new Error('Ugyldig sikkerhetskopi eller dataversjon.');
+  if (!object(v)||v.version!==1||!string(v.team)||!list(v.players,p=>object(p)&&key(p.id)&&string(p.name)&&[1,2,3,4].includes(p.level as number))||!list(v.sessions,session)||!list(v.favorites,key)||!record(v.notes,n=>object(n)&&string(n.note)&&string(n.variant)&&string(n.difficulty)&&(n.metadata===undefined||metadata(n.metadata)))||!record(v.diagrams,diagram)||!list(v.exercises,exercise)) throw new Error('Ugyldig sikkerhetskopi eller dataversjon.');
   const data = v as Data;
   for (const rows of [data.players,data.sessions,data.exercises,...data.sessions.map(s=>s.items)]) {
     if (new Set(rows.map(r=>r.id)).size!==rows.length) throw new Error('Sikkerhetskopien har dupliserte ID-er.');
@@ -56,7 +68,7 @@ export function saveData(storage:Pick<Storage,'setItem'>,data:Data) {
   storage.setItem(storageKey,JSON.stringify(data));
 }
 export function suggest(s:Session, exercises:Exercise[]):Item[] {
-  const eligible = exercises.filter(e=>!e.unresolved && (!e.players || (s.players>=e.players[0]&&s.players<=e.players[1])) && (!e.halls || e.halls.includes(s.hall)) && (s.coaches>0 || !e.sections.some(b=>/treneren/i.test(b.lines.join(' ')))));
+  const eligible = exercises.filter(e=>!e.unresolved && (!e.players || (s.players>=e.players[0]&&s.players<=e.players[1])) && (!e.halls?.length || e.halls.includes(s.hall)) && (e.coaches!==undefined?s.coaches>=e.coaches:s.coaches>0||!e.sections.some(b=>/treneren/i.test(b.lines.join(' ')))));
   const stages = ['Oppvarming',s.focus || 'Pasning','Småspill','Avsluttende'];
   const selected:Item[] = [];
   let remaining = s.duration;
