@@ -109,6 +109,7 @@ h2+.lines,h3+.lines{margin-top:6px}
 .grip{display:inline-flex;color:var(--muted);cursor:grab}
 .timer strong{font-size:2.7rem;color:var(--navy);font-variant-numeric:tabular-nums}
 .notice{padding:10px 16px;background:#fff1d6;color:#5c3a00}
+.app-version{padding:8px 16px 14px;text-align:center;color:var(--muted);font-size:.8rem}
 .toast{position:fixed;z-index:4;bottom:calc(78px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);background:#102e54;color:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 6px 18px #102e5440;pointer-events:none}
 .draft-count{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:3px;background:#1259a6;color:#fff;border-radius:999px;font-size:10px;line-height:1}
 .plan-columns{display:grid;gap:14px;align-items:start}

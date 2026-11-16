@@ -2,7 +2,10 @@ import {defineConfig} from 'vite';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 
+const {version}=JSON.parse(readFileSync(new URL('./package.json',import.meta.url),'utf8'));
+
 export default defineConfig({
+  define:{__APP_VERSION__:JSON.stringify(version)},
   base:'./',
   build:{rollupOptions:{output:{manualChunks(id){if(id.endsWith('/src/bank.json'))return 'exercise-bank';}}}},
   plugins:[{

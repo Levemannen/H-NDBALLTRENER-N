@@ -74,6 +74,7 @@ function App(){
       :path==='lag'?<Team data={data} draft={draft} setDraft={setDraft} update={update} notify={notify} replace={d=>{if(!persist(d))return false;setDraft(newSession());return true;}}/>
       :<div className="page stack"><h1>Siden finnes ikke</h1><a href="#/">Gå til hjem</a></div>}
     </main>
+    <footer className="app-version">Håndballtrener’n · Versjon {__APP_VERSION__}</footer>
     <div className={feedback?'toast':'visually-hidden'} role="status">{feedback}</div>
     <nav className="nav" aria-label="Hovedmeny">{[{url:'/',nav:'Hjem',icon:HomeIcon},...links.map(l=>l.url==='/ovelser'?{...l,icon:Search}:l)].map(({url,nav,icon:Icon})=>{
       const active=route===url||(url==='/ovelser'&&path==='ovelse')||(url==='/treninger'&&path==='trening');
