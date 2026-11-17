@@ -1,12 +1,11 @@
 import {useEffect,useMemo,useState} from 'react';
 import {ArrowDown,ArrowUp,CalendarDays,ChevronLeft,ChevronRight,Clock3,Play,Plus,Trash2,GripVertical} from 'lucide-react';
-import {type Data,type Exercise,type Session,itemFor,newSession,suggest,total,uid,dateToday,halls,norm} from './model';
+import {type Data,type Exercise,type Session,itemFor,newSession,suggest,total,uid,dateToday,halls,norm,cloneSession,activePlayers,playerCount,fits,alternatives,section} from './model';
 import {ExercisePicker,QuickExercise} from './Bank';
 
-export const cloneSession=(s:Session,template=false):Session=>({...structuredClone(s),id:uid(),date:dateToday(),name:s.name+(template?' – mal':' – kopi'),template,evaluation:undefined,items:s.items.map(i=>({...i,id:uid()}))});
 export function Attendance({data,selected,change}:{data:Data;selected:string[];change:(ids:string[])=>void}){
-  return <div className="stack"><div className="row between wrap"><strong>{selected.filter(id=>data.players.some(p=>p.id===id)).length} valgt</strong><div className="row wrap"><button type="button" onClick={()=>change(data.players.map(p=>p.id))}>Velg alle</button><button type="button" onClick={()=>change([])}>Tøm</button></div></div>
-    {data.players.length?<div className="attendance">{data.players.map(p=><label className="check" key={p.id}><input type="checkbox" checked={selected.includes(p.id)} onChange={e=>change(e.target.checked?[...selected,p.id]:selected.filter(id=>id!==p.id))}/>{p.name}</label>)}</div>:<p className="muted">Registrer spillere under Mitt lag.</p>}
+  return <div className="stack"><div className="row between wrap"><strong>{selected.filter(id=>data.players.some(p=>p.id===id)).length} valgt</strong><div className="row wrap"><button type="button" onClick={()=>change(activePlayers(data).map(p=>p.id))}>Velg alle</button><button type="button" onClick={()=>change([])}>Tøm</button></div></div>
+    {data.players.length?<div className="attendance">{data.players.filter(p=>!p.archived||selected.includes(p.id)).map(p=><label className="check" key={p.id}><input type="checkbox" checked={selected.includes(p.id)} onChange={e=>change(e.target.checked?[...selected,p.id]:selected.filter(id=>id!==p.id))}/>{p.name}{p.archived?' (arkivert)':''}</label>)}</div>:<p className="muted">Registrer spillere under Mitt lag.</p>}
   </div>;
 }
 export function Planner({draft,set,exercises,data,save,notify}:{draft:Session;set:(s:Session)=>void;exercises:Exercise[];data:Data;save:()=>void;notify:(message:string)=>void}){
@@ -35,18 +34,18 @@ export function Planner({draft,set,exercises,data,save,notify}:{draft:Session;se
     <section className="panel stack"><h2>Øktdetaljer</h2><div className="fields">
       <label>Navn<input value={draft.name} onChange={e=>change({name:e.target.value})} placeholder={'Trening '+draft.date}/></label>
       <label>Starttid (valgfritt)<input type="time" value={draft.startTime??''} onChange={e=>change({startTime:e.target.value||undefined})}/></label><label>Dato<input required type="date" value={draft.date} onChange={e=>change({date:e.target.value})}/></label>
-      {([['duration','Planlagt varighet (min)',1],['players','Antall spillere',0],['coaches','Antall trenere',0]] as const).map(([key,label,min])=><label key={key}>{label}<input type="number" min={min} required value={draft[key]} onChange={e=>change({[key]:Math.max(min,Number(e.target.value))})}/></label>)}
+      {([['duration','Planlagt varighet (min)',1],['players','Forventet spillerantall',0],['coaches','Antall trenere',0]] as const).map(([key,label,min])=><label key={key}>{label}<input type="number" min={min} required value={draft[key]} onChange={e=>change({[key]:Math.max(min,Number(e.target.value))})}/></label>)}
       <label>Hallstørrelse<select value={draft.hall} onChange={e=>change({hall:e.target.value})}>{halls.map(h=><option key={h} value={h}>{h[0].toUpperCase()+h.slice(1)}</option>)}</select></label>
       <label>Treningsfokus<input value={draft.focus} onChange={e=>change({focus:e.target.value})} placeholder="F.eks. pasning og mottak"/></label>
     </div></section>
-    <details className="panel"><summary>Oppmøte ({draft.attendees.length})</summary><Attendance data={data} selected={draft.attendees} change={attendees=>change({attendees,players:attendees.length,allocation:draft.allocation?.map(g=>({...g,players:g.players.filter(id=>attendees.includes(id))}))})}/><a className="button" href="#/lag">Fordel spillere i lag</a></details>
+    <p className="muted">{(draft.attendanceRegistered||draft.attendees.length)?`Registrert oppmøte: ${playerCount(draft)} spillere. Dette antallet brukes i forslag.`:`Ingen oppmøteliste registrert. Forslag bruker ${draft.players} forventede spillere.`}</p><details className="panel"><summary>Oppmøte ({draft.attendees.length})</summary><Attendance data={data} selected={draft.attendees} change={attendees=>change({attendees,attendanceRegistered:true,allocation:draft.allocation?.map(g=>({...g,players:g.players.filter(id=>attendees.includes(id))}))})}/><a className="button" href="#/lag">Fordel spillere i lag</a></details>
     <section className="stack">
       <div className="row between wrap"><h2>Øvelser</h2><span className="chip"><Clock3 size={17}/> {total(draft)} av {draft.duration} min · {Math.abs(draft.duration-total(draft))} min {total(draft)>draft.duration?'over tiden':'ledig'}</span></div>
       <div className="row wrap"><button type="button" onClick={()=>setPicker(picker===-1?undefined:-1)}><Plus size={18}/> Legg til øvelse</button><button type="button" onClick={generate}>Foreslå trening</button></div>
       {message&&<p role="status">{message}</p>}
       <div className={picker!==undefined?'plan-columns':'stack'}>
-      {picker!==undefined&&<div className="panel stack plan-picker"><div className="row between"><h3>{picker===-1?'Legg til øvelse':'Bytt øvelse'}</h3><button type="button" onClick={()=>setPicker(undefined)}>Lukk</button></div><ExercisePicker key={picker} exercises={catalog} onSelect={e=>{
-        change({items:picker===-1?[...draft.items,itemFor(e)]:draft.items.map((item,n)=>n===picker?{...item,exerciseId:e.id}:item)});
+      {picker!==undefined&&<div className="panel stack plan-picker"><div className="row between"><h3>{picker===-1?'Legg til øvelse':'Bytt øvelse'}</h3><button type="button" onClick={()=>setPicker(undefined)}>Lukk</button></div><ExercisePicker favorites={data.favorites} key={picker} exercises={catalog} onSelect={e=>{
+        change({items:picker===-1?[...draft.items,itemFor(e)]:draft.items.map((item,n)=>n===picker?{...item,exerciseId:e.id,variant:undefined}:item)});
         notify(picker===-1?'Øvelse lagt til':'Øvelse byttet');
         if(picker!==-1)setPicker(undefined);
       }}/></div>}
@@ -64,13 +63,15 @@ export function Planner({draft,set,exercises,data,save,notify}:{draft:Session;se
             const time=h*60+m+draft.items.slice(0,i).reduce((sum,x)=>sum+x.minutes,0)+offset;
             return String(Math.floor(time/60)%24).padStart(2,'0')+':'+String(time%60).padStart(2,'0');
           }).join(' – ')}</p>}
-          <div className="fields"><label>Minutter<input type="number" required min="1" value={item.minutes} onChange={e=>update({minutes:Math.max(1,Number(e.target.value))})}/></label><label>Kommentar<input value={item.comment} onChange={e=>update({comment:e.target.value})}/></label></div>
-          <div className="row wrap"><button type="button" onClick={()=>setPicker(i)}>Bytt øvelse</button>{exercise&&<a className="button" href={'#/ovelse/'+exercise.id}>Vis beskrivelse</a>}</div>
+          <div className="fields">{exercise&&<label>Variant<select value={item.variant??''} onChange={e=>update({variant:e.target.value||undefined})}><option value="">Grunnøvelse</option>{exercise.sections.filter(s=>/variant/i.test(s.label)).map(s=><option key={s.label}>{s.label}</option>)}</select></label>}<label>Minutter<input type="number" required min="1" value={item.minutes} onChange={e=>update({minutes:Math.max(1,Number(e.target.value))})}/></label><label>Kommentar<input value={item.comment} onChange={e=>update({comment:e.target.value})}/></label></div>
+          <div className="row wrap"><button type="button" onClick={()=>setPicker(i)}>Bytt øvelse</button><button type="button" onClick={()=>change({items:[...draft.items.slice(0,i+1),{...item,id:uid()},...draft.items.slice(i+1)]})}>Dupliser øvelse</button>{exercise&&<a className="button" href={'#/ovelse/'+exercise.id}>Vis beskrivelse</a>}</div>
+          {exercise&&!fits(catalog.find(e=>e.id===exercise.id)!,draft)&&<p className="notice">Registrerte rammer passer ikke med denne øvelsen. Du kan beholde den eller velge et alternativ.</p>}
+          {exercise&&<details><summary>Foreslå alternativ</summary>{alternatives(catalog.find(e=>e.id===exercise.id)!,draft,catalog).map(e=><button type="button" key={e.id} onClick={()=>update({exerciseId:e.id,variant:undefined})}>{e.title} · Felles ferdighet eller kategori{e.players?' · '+e.players.join('–')+' spillere':''}</button>)}</details>}
         </div>;
       })}
       </div></div>
     </section>
-    <div className="row wrap"><button className="primary">Lagre {draft.template?'mal':'trening'}</button><button type="button" onClick={()=>{if((!draft.items.length&&!draft.name)||confirm('Starte på en ny trening? Denne planen må lagres først hvis du vil beholde endringene.'))set(newSession());}}>Ny trening</button></div>
+    <div className="row wrap"><button className="primary">Lagre {draft.template?'mal':'trening'}</button><button type="button" onClick={()=>{if(confirm('Starte på en ny trening? Lagre eller eksporter utkastet først hvis du vil beholde det.'))set(newSession());}}>Ny trening</button></div>
   </form>;
 }
 export function Saved({data,edit,update}:{data:Data;edit:(s:Session)=>void;update:(fn:(d:Data)=>Data)=>void}){
@@ -86,8 +87,9 @@ export function Saved({data,edit,update}:{data:Data;edit:(s:Session)=>void;updat
     </section>)}
   </div>;
 }
-export function HallMode({session,exercises,data}:{session:Session;exercises:Exercise[];data:Data}){
+export function HallMode({session,exercises,data,update}:{session:Session;exercises:Exercise[];data:Data;update:(fn:(d:Data)=>Data)=>boolean}){
   const timerKey='handball.timer.'+session.id;
+  const [planB,setPlanB]=useState('');
   const [restored]=useState(()=>{
     try {
       const saved=JSON.parse(sessionStorage.getItem(timerKey)??'null');
@@ -117,9 +119,14 @@ export function HallMode({session,exercises,data}:{session:Session;exercises:Exe
   function go(n:number){setIndex(n);setDeadline(undefined);setRemaining((session.items[n]?.minutes??0)*60);}
   return <div className="page detail stack">
     <a className="back" href="#/treninger"><ChevronLeft size={20}/> Mine treninger</a><p className="muted">{session.name} · {item?index+1:0} av {session.items.length}</p><h1>{exercise?.title??(item?'Øvelse mangler':'Treningen har ingen øvelser')}</h1>
-    {item&&<><div className="panel stack timer"><div className="row between wrap"><strong>{String(Math.floor(remaining/60)).padStart(2,'0')}:{String(remaining%60).padStart(2,'0')}</strong><span>{item.minutes} min planlagt</span></div><div className="row wrap"><button className="primary" disabled={!remaining&&deadline===undefined} onClick={()=>{if(deadline!==undefined){setRemaining(Math.max(0,Math.ceil((deadline-Date.now())/1000)));setDeadline(undefined);}else setDeadline(Date.now()+remaining*1000);}}>{deadline===undefined?(remaining<(item.minutes*60)&&remaining>0?'Fortsett':'Start'):'Pause'}</button><button onClick={()=>go(index)}>Nullstill</button></div></div>
+    {item&&<><div className="panel stack timer"><div className="row between wrap"><strong>{String(Math.floor(remaining/60)).padStart(2,'0')}:{String(remaining%60).padStart(2,'0')}</strong><span>{item.minutes} min planlagt</span></div><div className="row wrap"><button className="primary" disabled={!remaining&&deadline===undefined} onClick={()=>{if(deadline!==undefined){setRemaining(Math.max(0,Math.ceil((deadline-Date.now())/1000)));setDeadline(undefined);}else setDeadline(Date.now()+remaining*1000);}}>{deadline===undefined?(remaining<(item.minutes*60)&&remaining>0?'Fortsett':'Start'):'Pause'}</button><button onClick={()=>go(index)}>Nullstill</button>{[-5,-2,2,5].map(minutes=><button key={minutes} onClick={()=>{const seconds=Math.max(0,(deadline?Math.ceil((deadline-Date.now())/1000):remaining)+minutes*60);setRemaining(seconds);if(deadline)setDeadline(seconds?Date.now()+seconds*1000:undefined);}}>{minutes>0?'+':''}{minutes} min</button>)}</div></div>
       {item.comment&&<p className="panel">{item.comment}</p>}
-      {exercise&&<QuickExercise e={exercise} data={data}/>}
+      {exercise&&<QuickExercise e={exercise} data={data} variant={item.variant??''}/>}
+      <details className="panel"><summary>Plan B – tilpass treningen</summary><label>Hva har endret seg?<select value={planB} onChange={e=>setPlanB(e.target.value)}><option value="">Velg</option><option value="fewer">Færre spillere</option><option value="easy">For vanskelig</option><option value="hard">For enkel</option><option value="short">10 minutter mindre</option><option value="long">10 minutter ekstra</option></select></label>
+      {planB==='fewer'&&<p>Åpne treningen under Mine treninger og juster oppmøtet. Planleggeren viser hvilke øvelser som ikke passer og foreslår alternativer. Øvelsene beholdes til du velger å bytte.</p>}
+      {(planB==='easy'||planB==='hard')&&exercise&&<>{section(exercise,'Nivåtilpasning').filter(line=>line.toLowerCase().includes(planB==='easy'?'lettere':'vanskeligere')).map((line,i)=><div key={i}><p>{line}</p><button onClick={()=>{if(confirm('Legge denne tilpasningen til kommentaren for gjeldende øvelse?'))update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,items:s.items.map(x=>x.id===item.id?{...x,comment:[x.comment,line].filter(Boolean).join(' · ')}:x)}:s)}));}}>Bruk tilpasningen</button></div>)}</>}
+      {(planB==='short'||planB==='long')&&<><p>Juster tiden på gjeldende øvelse med {planB==='short'?'−10':'+10'} minutter (minst 1 minutt). Øvrige øvelser beholdes.</p><button onClick={()=>{const minutes=Math.max(1,item.minutes+(planB==='short'?-10:10));if(confirm('Endre denne øvelsen fra '+item.minutes+' til '+minutes+' minutter?')&&update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,items:s.items.map(x=>x.id===item.id?{...x,minutes}:x)}:s)}))){const seconds=Math.max(0,(deadline?Math.ceil((deadline-Date.now())/1000):remaining)+(minutes-item.minutes)*60);setRemaining(seconds);if(deadline)setDeadline(seconds?Date.now()+seconds*1000:undefined);setPlanB('');}}}>Bruk tidsendring</button></>}
+      </details>
       <p className="muted">{next?'Neste: '+next.title:'Siste øvelse'}</p><div className="row between"><button disabled={index===0} onClick={()=>go(index-1)}><ChevronLeft size={18}/> Forrige</button><button disabled={index>=session.items.length-1} onClick={()=>go(index+1)}>Neste <ChevronRight size={18}/></button></div>
     </>}
   </div>;

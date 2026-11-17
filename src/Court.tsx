@@ -61,7 +61,7 @@ export function Court({diagram=blankDiagram,onPlace,onSelect,onMove,selected}:{d
     </g>)}
     {diagram.arrows.map(a=>{
       const start=coords(a.from).join(' '),end=coords(a.to).join(' ');
-      return <path key={a.id} d={a.bend?'M'+start+' Q'+coords(a.bend).join(' ')+' '+end:'M'+start+' L'+end} fill="none" stroke={arrowColors[a.kind]} strokeWidth={selected===a.id?6:3.5} strokeDasharray={a.kind==='pass'?'8 7':a.kind==='carry'?'12 4 2 4':undefined} markerEnd={'url(#'+id+a.kind+')'} />;
+      return <path onClick={onSelect?e=>{e.stopPropagation();onSelect(a.id);}:undefined} key={a.id} d={a.bend?'M'+start+' Q'+coords(a.bend).join(' ')+' '+end:'M'+start+' L'+end} fill="none" stroke={arrowColors[a.kind]} strokeWidth={selected===a.id?6:3.5} strokeDasharray={a.kind==='pass'?'8 7':a.kind==='carry'?'12 4 2 4':undefined} markerEnd={'url(#'+id+a.kind+')'} />;
     })}
     {diagram.marks.map(m=><g key={m.id} transform={'translate('+coords(preview?.id===m.id?preview:m).join(' ')+')'} onClick={onSelect?e=>{e.stopPropagation();onSelect(m.id);}:undefined}
       onPointerDown={onMove?event=>{
@@ -90,7 +90,7 @@ export function Court({diagram=blankDiagram,onPlace,onSelect,onMove,selected}:{d
 export function DiagramCard({diagram}:{diagram?:Diagram}){
   const [after,setAfter]=useState(false);
   const shown=after&&diagram===originalDiagram?nextPosition:diagram;
-  return <div className="diagram"><Court diagram={shown}/>{shown?<div className="legend">
+  return <div className="diagram"><Court diagram={shown}/>{shown&&<p className="muted">Prinsippskisse. Les organiseringen og valgt variant før gjennomføring.</p>}{shown?<div className="legend">
     {Object.entries(arrowLabels).filter(([kind])=>shown.arrows.some(a=>a.kind===kind)).map(([kind,label])=><span key={kind}><i className={kind}/> {label}</span>)}
     {(['empty','cone','keeper'] as const).filter(kind=>shown.marks.some(m=>m.kind===kind)).map(kind=><span key={kind}><i className={kind}/> {symbols[kind]}</span>)}
   </div>:<p className="muted">Baneplassholder · ingen illustrasjon lagt inn</p>}
@@ -144,6 +144,8 @@ export function DiagramEditor({initial,onSave,onClose}:{initial?:Diagram;onSave:
       <label>Valgt element<select value={mark||arrow?selected:''} onChange={e=>select(e.target.value)}><option value="">Ingen</option>{d.marks.map((m,i)=><option key={m.id} value={m.id}>{i+1}. {symbols[m.kind]} {m.label}</option>)}{d.arrows.map((a,i)=><option key={a.id} value={a.id}>Pil {i+1} – {arrowLabels[a.kind]}</option>)}</select></label>
       {mark&&<><label>Merkelapp<input value={mark.label} maxLength={24} onChange={e=>set({...d,marks:d.marks.map(m=>m.id===mark.id?{...m,label:e.target.value}:m)})}/></label>{(['x','y'] as const).map(axis=><label key={axis}>{axis.toUpperCase()}<input type="number" min="0" max="100" value={mark[axis]} onChange={e=>set({...d,marks:d.marks.map(m=>m.id===mark.id?{...m,[axis]:Math.min(100,Math.max(0,Number(e.target.value)))}:m)})}/></label>)}</>}
       {mark?.kind==='player'&&<label>Valgt spillers rolle<select value={mark.team} onChange={e=>set({...d,marks:d.marks.map(m=>m.id===mark.id?{...m,team:Number(e.target.value) as 0|1}:m)})}><option value="0">Angrep</option><option value="1">Forsvar</option></select></label>}
+      {arrow&&<><label>Piltype<select value={arrow.kind} onChange={e=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,kind:e.target.value as typeof a.kind}:a)})}>{Object.entries(arrowLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>{(['from','to','bend'] as const).map(point=><fieldset key={point}><legend>{point==='from'?'Start':point==='to'?'Slutt':'Buepunkt'}</legend>{(['x','y'] as const).map(axis=><label key={axis}>{axis.toUpperCase()}<input type="number" min="0" max="100" value={(arrow[point]??{x:50,y:50})[axis]} onChange={e=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,[point]:{...(a[point]??{x:50,y:50}),[axis]:Math.min(100,Math.max(0,Number(e.target.value)))}}:a)})}/></label>)}</fieldset>)}<button onClick={()=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,bend:undefined}:a)})}>Rett pil</button></>}
+      {(mark||arrow)&&<button onClick={()=>{const id=uid();set(mark?{...d,marks:[...d.marks,{...mark,id,x:Math.min(100,mark.x+4),y:Math.min(100,mark.y+4)}]}:{...d,arrows:[...d.arrows,{...structuredClone(arrow!),id}]});select(id);}}>Dupliser element</button>}
       {(mark||arrow)&&<button onClick={()=>{set({...d,marks:d.marks.filter(m=>m.id!==selected),arrows:d.arrows.filter(a=>a.id!==selected)});select('');}}>Fjern element</button>}
     </div>
     <div className="row wrap"><button className="primary" onClick={()=>onSave(d)}>Lagre illustrasjon</button><button onClick={onClose}>Avbryt</button></div>
