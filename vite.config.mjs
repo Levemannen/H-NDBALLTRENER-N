@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 
 const {version}=JSON.parse(readFileSync(new URL('./package.json',import.meta.url),'utf8'));
+if(!/^\d+\.\d+\.\d+$/.test(version))throw new Error('Appversjonen må være på formen major.minor.patch i package.json.');
 
 export default defineConfig({
   define:{__APP_VERSION__:JSON.stringify(version)},
@@ -12,6 +13,7 @@ export default defineConfig({
     name:'handball-offline',
     apply:'build',
     generateBundle(_opts,bundle){
+      this.emitFile({type:'asset',fileName:'version.json',source:JSON.stringify({version})+'\n'});
       const assets=['./','index.html','manifest.webmanifest','club-icon.svg','valerenga-handball.png',...Object.keys(bundle).filter(f=>f!=='index.html')];
       const worker=readFileSync(new URL('./scripts/sw.js',import.meta.url),'utf8');
       const content=[

@@ -65,3 +65,7 @@ Actions-versjoner er kontrollert mot offisielle utgivelser: [checkout 7.0.1](htt
 - Flere diagramtrinn for alle øvelser, pil med flere knekkpunkter og låsing av spillere er ikke implementert.
 - Nettlesertestene bruker Chromium/Edge. Fysisk Samsung-installasjon, Firefox på telefon og garanterte bakgrunnsalarmer er ikke verifisert.
 - Ny produksjonspublisering må verifiseres etter innfletting i main. En vellykket lokal bygging betyr ikke at GitHub Pages er oppdatert.
+
+## Versjonsnummer
+
+package.json er eneste kilde til versjonsnummeret. Ved nye utgivelser skal det oppdateres før innfletting i main. Både lokalappen og GitHub Pages bygges med pnpm build, som kontrollerer at appen og version.json har samme versjon. Publisert versjon kan kontrolleres på https://levemannen.github.io/H-NDBALLTRENER-N/version.json etter publisering. Se AGENTS.md for reglene ved videre arbeid.
