@@ -1,9 +1,12 @@
+import {constrainedGroups,ruleViolations} from './groupRules';
+import {GroupRulesEditor} from './GroupRulesEditor';
 import {useRef,useState} from 'react';
-import {Download,Trash2,Upload,UserPlus,Users} from 'lucide-react';
-import {type Data,type Level,type Session,groups,levels,parseData,uid,dateToday,activePlayers,archivePlayer,deletePlayer} from './model';
+import {Download,Upload,UserPlus,Users} from 'lucide-react';
+import {type Data,type Level,type Session,levels,uid,activePlayers,archivePlayer,deletePlayer,removeFromSession} from './model';
 import {Attendance} from './Training';
+import {parseBackup,project,type Workspace} from './workspace';
 
-export function Team({data,draft,setDraft,update,replace,notify}:{data:Data;draft:Session;setDraft:(s:Session)=>void;update:(fn:(d:Data)=>Data)=>boolean;replace:(d:Data)=>boolean;notify:(message:string)=>void}){
+export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data:Data;draft:Session;setDraft:(s:Session)=>void;update:(fn:(d:Data)=>Data)=>boolean;replace:(d:Workspace)=>boolean;exportAll:()=>void;notify:(message:string)=>void}){
   const [name,setName]=useState('');
   const [query,setQuery]=useState('');
   const [sort,setSort]=useState('name');
@@ -11,8 +14,8 @@ export function Team({data,draft,setDraft,update,replace,notify}:{data:Data;draf
   const [swap,setSwap]=useState('');
   const visiblePlayers=data.players.filter(p=>Boolean(p.archived)===archived&&p.name.toLocaleLowerCase('nb').includes(query.trim().toLocaleLowerCase('nb'))).sort((a,b)=>sort==='level'?a.level-b.level||a.name.localeCompare(b.name,'nb'):a.name.localeCompare(b.name,'nb'));
   const [level,setLevel]=useState<Level>(4);
-  const [selection,setSelection]=useState<string[]>(draft.attendees.length?draft.attendees:activePlayers(data).map(p=>p.id));
-  const [source,setSource]=useState(draft.attendees.length?'draft':'all');
+  const [selection,setSelection]=useState<string[]>((draft.attendanceRegistered||draft.attendees.length)?draft.attendees:activePlayers(data).map(p=>p.id));
+  const [source,setSource]=useState((draft.attendanceRegistered||draft.attendees.length)?'draft':'all');
   const [count,setCount]=useState(2);
   const [groupSize,setGroupSize]=useState(0);
   const [teams,setTeams]=useState<string[][]>(draft.allocation?.map(g=>g.players)??[]);
@@ -22,23 +25,16 @@ export function Team({data,draft,setDraft,update,replace,notify}:{data:Data;draf
   const playerExists=(id:string)=>data.players.some(p=>p.id===id);
   function distribute(byLevel:boolean){
     if(teams.length&&!confirm('Erstatte den eksisterende lagfordelingen med en ny?'))return;
-    const players=data.players.filter(p=>selection.includes(p.id));
-    setTeams(groups(players,groupSize?Math.ceil(players.length/groupSize):count,byLevel).map(g=>g.map(p=>p.id)));
-  }
-  function exportData(){
-    const url=URL.createObjectURL(new Blob([JSON.stringify({...data,draft},null,2)],{type:'application/json'}));
-    const a=document.createElement('a');
-    a.href=url;a.download='handball-'+dateToday()+'.backup.json';a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-    notify('Sikkerhetskopi eksportert');
+    const players=data.players.filter(p=>!p.archived&&selection.includes(p.id));
+    try{setTeams(constrainedGroups(players,groupSize?Math.ceil(players.length/groupSize):count,byLevel,data.groupRules??[]).map(g=>g.map(p=>p.id)));setMessage('');}catch(error){setMessage((error as Error).message);}
   }
   async function importData(f:File){
     try {
-      const imported=parseData(await f.text());
+      const backup=parseBackup(await f.text());const imported=project(backup);
       if(confirm('Sikkerhetskopien har '+imported.players.length+' spillere og '+imported.sessions.length+' treningsplaner. Erstatte alle lokale brukerdata?')){
-        if(!replace(imported)){setMessage('Importen kunne ikke lagres.');return;}
-        setSource('all');setSelection(imported.players.map(p=>p.id));setTeams([]);
-        setMessage('Sikkerhetskopien er importert.');
+        if(!replace(backup)){setMessage('Importen kunne ikke lagres.');return;}
+        setSource('all');setSelection(activePlayers(imported).map(p=>p.id));setTeams([]);
+        setMessage('Sikkerhetskopien er importert.');notify('Sikkerhetskopien er importert.');
       }
     }catch{setMessage('Filen er ikke en gyldig sikkerhetskopi for denne versjonen.');}
   }
@@ -57,11 +53,11 @@ export function Team({data,draft,setDraft,update,replace,notify}:{data:Data;draf
         <input aria-label="Spillernavn" value={p.name} onChange={e=>update(d=>({...d,players:d.players.map(x=>x.id===p.id?{...x,name:e.target.value}:x)}))}/>
         <select aria-label={'Nivå for '+p.name} value={p.level} onChange={e=>{if(update(d=>({...d,players:d.players.map(x=>x.id===p.id?{...x,level:Number(e.target.value) as Level}:x)})))notify('Spiller oppdatert');}}>{levels.map((s,i)=><option key={s} value={i+1}>{i+1} · {s}</option>)}</select>
         <button onClick={()=>{if(update(d=>archivePlayer(d,p.id,!p.archived))){setSelection(selection.filter(id=>id!==p.id));setTeams([]);notify(p.archived?'Spiller gjenaktivert':'Spiller arkivert – historikken er bevart');}}}>{p.archived?'Gjenaktiver':'Arkiver'}</button>
-        {p.archived&&<button aria-label={'Slett permanent '+p.name} onClick={()=>{if(confirm('Slette '+p.name+' permanent? Navn, nivå, oppmøte og lagreferanser fjernes fra alle lagrede treninger. Eksporter en sikkerhetskopi først dersom du vil beholde historikken.')&&update(d=>deletePlayer(d,p.id))){setDraft({...draft,attendees:draft.attendees.filter(id=>id!==p.id),allocation:draft.allocation?.map(g=>({...g,players:g.players.filter(id=>id!==p.id)}))});setSelection(selection.filter(id=>id!==p.id));setTeams([]);}}}>Slett permanent</button>}
+        {p.archived&&<button aria-label={'Slett permanent '+p.name} onClick={()=>{if(confirm('Slette '+p.name+' permanent? Navn, nivå, oppmøte og lagreferanser fjernes fra alle lagrede treninger. Eksporter en sikkerhetskopi først dersom du vil beholde historikken.')&&update(d=>deletePlayer(d,p.id))){setDraft(removeFromSession(draft,p.id));setSelection(selection.filter(id=>id!==p.id));setTeams([]);}}}>Slett permanent</button>}
       </div>)}
     </section>
     <section className="panel stack">
-      <h2 className="row"><Users size={22}/> Lagdeling</h2>
+      <h2 className="row"><Users size={22}/> Lagdeling</h2><GroupRulesEditor players={data.players} rules={data.groupRules??[]} change={groupRules=>update(d=>({...d,groupRules}))}/>{message&&<p role="status">{message}</p>}{ruleViolations(teams,data.groupRules??[]).length>0&&<p role="alert">Den manuelle fordelingen bryter en eller flere regler. Endre fordelingen eller reglene før lagring.</p>}
       <div className="fields"><label>Oppmøteliste<select value={source} onChange={e=>{const id=e.target.value;setSource(id);setSelection(id==='all'?activePlayers(data).map(p=>p.id):id==='draft'?draft.attendees:data.sessions.find(s=>s.id===id)?.attendees??[]);const saved=id==='draft'?draft:data.sessions.find(s=>s.id===id);setTeams(saved?.allocation?.map(g=>g.players)??[]);setNames(saved?.allocation?.map(g=>g.name)??[]);}}><option value="all">Alle spillere</option><option value="draft">Trening under planlegging</option>{data.sessions.filter(s=>!s.template).map(s=><option key={s.id} value={s.id}>{s.date} · {s.name}</option>)}</select></label>
       <label>Ønsket gruppestørrelse (0 = bruk antall lag)<input type="number" min="0" value={groupSize} onChange={e=>setGroupSize(Math.max(0,Math.floor(Number(e.target.value))))}/></label><label>Antall lag<input type="number" min="1" value={count} onChange={e=>setCount(Math.max(1,Math.floor(Number(e.target.value))))}/></label></div>
       <Attendance data={data} selected={selection} change={ids=>{setSelection(ids);setTeams([]);}}/>
@@ -71,7 +67,7 @@ export function Team({data,draft,setDraft,update,replace,notify}:{data:Data;draf
     </section>
     <section className="panel stack"><h2>Lagre oppmøte og lag</h2>
     <p>Jevne lag balanserer nivåene mellom lagene. Nivådeling samler spillere med lignende nivå.</p>
-    <button disabled={source==='all'} onClick={()=>{
+    <button disabled={source==='all'||ruleViolations(teams,data.groupRules??[]).length>0} onClick={()=>{
       const attendees=selection.filter(playerExists);
       const allocation=teams.map((g,i)=>({name:names[i]??'Lag '+(i+1),players:g.filter(id=>attendees.includes(id))}));
       const patch={attendees,attendanceRegistered:true,allocation};
@@ -82,7 +78,7 @@ export function Team({data,draft,setDraft,update,replace,notify}:{data:Data;draf
     </section>
     <section className="panel stack"><h2>Sikkerhetskopi</h2><p className="muted">Overfør lokale brukerdata mellom enhetene dine med en JSON-fil.</p>
       <input className="visually-hidden" type="file" tabIndex={-1} ref={file} accept=".json,application/json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void importData(f);}}/>
-      <div className="row wrap"><button onClick={exportData}><Download size={18}/> Eksporter</button><button onClick={()=>file.current?.click()}><Upload size={18}/> Importer</button></div>
+      <div className="row wrap"><button onClick={exportAll}><Download size={18}/> Eksporter</button><button onClick={()=>file.current?.click()}><Upload size={18}/> Importer</button></div>
       {message&&<p role="status">{message}</p>}
     </section>
   </div>;

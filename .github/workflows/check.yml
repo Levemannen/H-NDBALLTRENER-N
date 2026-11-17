@@ -2,7 +2,7 @@ name: Kontroller endringer
 on:
   pull_request:
   push:
-    branches: [feature/handballtrener-2-1]
+    branches: [feature/handballtrener-2-1, feature/handballtrener-3-0]
 permissions:
   contents: read
 jobs:

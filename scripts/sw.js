@@ -12,6 +12,17 @@ self.addEventListener('fetch',event=>{
   const {request}=event;
   if(request.method!=='GET'||!request.url.startsWith(self.registration.scope))return;
   event.respondWith(caches.open(cacheName).then(async cache=>{
+    // Keep each shell paired with its fully precached build. Check the network,
+    // but do not serve a different shell before its worker has finished installation.
+    if(request.mode==='navigate'){
+      const shell=await cache.match(new URL('index.html',self.registration.scope));
+      const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),3500);
+      try{const fresh=await fetch(new Request(request,{cache:'no-store',signal:controller.signal}));
+        if(fresh.ok&&(!shell||await fresh.clone().text()===await shell.clone().text()))return fresh;
+        event.waitUntil(self.registration.update().catch(()=>{}));
+      }catch{/* A complete cached shell remains usable offline. */}finally{clearTimeout(timeout);}
+      if(shell)return shell;
+    }
     const url=request.mode==='navigate'?new URL('index.html',self.registration.scope):request;
     return await cache.match(url) ?? await caches.match(url) ?? fetch(request);
   }));

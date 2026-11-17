@@ -1,25 +1,12 @@
 import {useId,useRef,useState, type MouseEvent, type PointerEvent} from 'react';
 import {type Diagram,type Point,type SymbolKind,uid} from './model';
-import {reviewed} from './diagrams';
+import {reviewed,originalDiagram,nextPosition} from './diagrams';
+import generated from './illustrations.json';
 
 export const blankDiagram:Diagram={court:'full',marks:[],arrows:[]};
-const positions=[[40,39],[50,27],[60,39],[60,61],[40,61],[50,73]];
-export const originalDiagram:Diagram={
-  court:'crop',
-  marks:[
-    ...positions.map(([x,y],i)=>({id:'cone-'+i,kind:'cone' as const,x,y:y-10,label:'',team:0 as const})),
-    ...positions.slice(0,5).map(([x,y],i)=>({id:'player-'+i,kind:'player' as const,x,y,label:String(i+1),team:0 as const})),
-    {id:'ball',kind:'ball',x:44,y:43,label:'',team:0},
-    {id:'empty',kind:'empty',x:50,y:73,label:'',team:0}
-  ],
-  arrows:[
-    {id:'pass',kind:'pass',from:{x:46,y:44},bend:{x:51,y:53},to:{x:57,y:44}},
-    {id:'run',kind:'run',from:{x:38,y:46},bend:{x:27,y:75},to:{x:46,y:73}}
-  ]
-};
-const nextPosition:Diagram={...originalDiagram,arrows:[],marks:originalDiagram.marks.map(m=>m.id==='player-0'?{...m,x:50,y:73}:m.id==='empty'?{...m,x:40,y:39}:m.id==='ball'?{...m,x:64,y:43}:m)};
-export const diagramFor=(id:string, diagrams:Record<string,Diagram>)=>diagrams[id]??(id==='master-16'?originalDiagram:reviewed[id]);
-const symbols:Record<SymbolKind,string>={player:'Spiller',keeper:'Målvakt',cone:'Kjegle',ball:'Ball',goal:'Mål',hurdle:'Hinder',mat:'Matte',empty:'Ledig plass',text:'Tekst'};
+export {originalDiagram,nextPosition} from './diagrams';
+export const diagramFor=(id:string, diagrams:Record<string,Diagram>)=>diagrams[id]??(id==='master-16'?originalDiagram:reviewed[id]??(generated as Record<string,{frames:Diagram[]}>)[id]?.frames[0]);
+const symbols:Record<SymbolKind,string>={player:'Spiller',keeper:'Målvakt',cone:'Kjegle',ball:'Ball',goal:'Mål',hurdle:'Hinder',mat:'Matte',empty:'Ledig plass',text:'Tekst',hoop:'Rockering',bench:'Benk',wall:'Vegg'};
 const arrowLabels={run:'Løp',pass:'Pasning',carry:'Ballføring'};
 const arrowColors={run:'#0656ac',pass:'#dc2328',carry:'#6835a1'};
 const coords=(p:Point)=>[p.x*5.6+10,p.y*2.8+10] as const;
@@ -28,7 +15,7 @@ export function Court({diagram=blankDiagram,onPlace,onSelect,onMove,selected}:{d
   const svg=useRef<SVGSVGElement>(null);
   const drag=useRef<{id:string;pointer:number;x:number;y:number} | null>(null);
   const [preview,setPreview]=useState<(Point&{id:string})>();
-  const view=diagram.court==='half'?'0 0 300 300':diagram.court==='crop'?'125 35 350 230':'0 0 580 300';
+  const view=diagram.court==='half'?'-15 -15 330 330':diagram.court==='crop'?'115 25 370 250':'-15 -15 610 330';
   function ground(event:{clientX:number;clientY:number}){
     const matrix=svg.current?.getScreenCTM();
     if(!matrix)return;
@@ -61,7 +48,7 @@ export function Court({diagram=blankDiagram,onPlace,onSelect,onMove,selected}:{d
     </g>)}
     {diagram.arrows.map(a=>{
       const start=coords(a.from).join(' '),end=coords(a.to).join(' ');
-      return <path onClick={onSelect?e=>{e.stopPropagation();onSelect(a.id);}:undefined} key={a.id} d={a.bend?'M'+start+' Q'+coords(a.bend).join(' ')+' '+end:'M'+start+' L'+end} fill="none" stroke={arrowColors[a.kind]} strokeWidth={selected===a.id?6:3.5} strokeDasharray={a.kind==='pass'?'8 7':a.kind==='carry'?'12 4 2 4':undefined} markerEnd={'url(#'+id+a.kind+')'} />;
+      return <path onClick={onSelect?e=>{e.stopPropagation();onSelect(a.id);}:undefined} key={a.id} d={a.via?.length?'M'+start+a.via.map(p=>' L'+coords(p).join(' ')).join('')+' L'+end:a.bend?'M'+start+' Q'+coords(a.bend).join(' ')+' '+end:'M'+start+' L'+end} fill="none" stroke={arrowColors[a.kind]} strokeWidth={selected===a.id?6:3.5} strokeDasharray={a.kind==='pass'?'8 7':a.kind==='carry'?'12 4 2 4':undefined} markerEnd={'url(#'+id+a.kind+')'} />;
     })}
     {diagram.marks.map(m=><g key={m.id} transform={'translate('+coords(preview?.id===m.id?preview:m).join(' ')+')'} onClick={onSelect?e=>{e.stopPropagation();onSelect(m.id);}:undefined}
       onPointerDown={onMove?event=>{
@@ -75,7 +62,7 @@ export function Court({diagram=blankDiagram,onPlace,onSelect,onMove,selected}:{d
       }:undefined} onPointerUp={onMove?release:undefined} onPointerCancel={onMove?release:undefined}>
       <title>{symbols[m.kind]} {m.label}</title>
       {selected===m.id&&<circle r="23" fill="none" stroke="#262c39" strokeDasharray="3 4"/>}
-      {m.kind==='player'&&<><circle r="20" fill={m.team?'#be2c42':'#0761b7'} stroke="white" strokeWidth="2"/><text textAnchor="middle" dominantBaseline="central" className="player-label">{m.label}</text></>}
+      {m.kind==='player'&&<><circle r="20" fill={m.team?'#be2c42':'#0761b7'} stroke="white" strokeWidth="2"/><text textAnchor="middle" dominantBaseline="central" className="player-label" style={m.label.length>2?{fontSize:Math.max(8,23-m.label.length*2)}:undefined}>{m.label}</text></>}
       {m.kind==='keeper'&&<><rect x="-18" y="-18" width="36" height="36" rx="8" fill="#136346" stroke="white" strokeWidth="2"/><text textAnchor="middle" dominantBaseline="central" className="player-label">{m.label||'M'}</text></>}
       {m.kind==='cone'&&<path d="M-12 11L0-15L12 11Z" fill="#fa9216" stroke="#fff5d8"/>}
       {m.kind==='empty'&&<circle r="19" fill="#e5fbdf" fillOpacity=".6" stroke="#14803e" strokeWidth="2.5" strokeDasharray="5 4"/>}
@@ -83,18 +70,19 @@ export function Court({diagram=blankDiagram,onPlace,onSelect,onMove,selected}:{d
       {m.kind==='goal'&&<path d="M-16 9V-10H16V9" fill="none" stroke="#bb2031" strokeWidth="4"/>}
       {m.kind==='hurdle'&&<path d="M-12 9V-7H12V9" fill="none" stroke="#a86713" strokeWidth="4"/>}
       {m.kind==='mat'&&<rect x="-27" y="-13" width="54" height="26" rx="4" fill="#6674a6" stroke="white" strokeWidth="2"/>}
+      {m.kind==='hoop'&&<ellipse rx="22" ry="15" fill="none" stroke="#f28b1a" strokeWidth="3"/>}{m.kind==='bench'&&<rect x="-30" y="-8" width="60" height="16" fill="#a86713"/>}{m.kind==='wall'&&<path d="M-40 0H40" stroke="#334155" strokeWidth="8"/>}
       {m.kind==='text'&&<text textAnchor="middle" fill="#102a51" fontSize="15">{m.label}</text>}
     </g>)}
   </svg>;
 }
-export function DiagramCard({diagram}:{diagram?:Diagram}){
+export function DiagramCard({diagram,steps=true}:{diagram?:Diagram;steps?:boolean}){
   const [after,setAfter]=useState(false);
   const shown=after&&diagram===originalDiagram?nextPosition:diagram;
   return <div className="diagram"><Court diagram={shown}/>{shown&&<p className="muted">Prinsippskisse. Les organiseringen og valgt variant før gjennomføring.</p>}{shown?<div className="legend">
     {Object.entries(arrowLabels).filter(([kind])=>shown.arrows.some(a=>a.kind===kind)).map(([kind,label])=><span key={kind}><i className={kind}/> {label}</span>)}
-    {(['empty','cone','keeper'] as const).filter(kind=>shown.marks.some(m=>m.kind===kind)).map(kind=><span key={kind}><i className={kind}/> {symbols[kind]}</span>)}
+    {shown.marks.some(m=>m.kind==='player'&&!m.team)&&<span><i className="attack"/> Angrep / spiller</span>}{shown.marks.some(m=>m.kind==='player'&&m.team===1)&&<span><i className="defence"/> Forsvar / jeger</span>}{(['empty','cone','keeper','ball','goal','hurdle','mat','hoop','bench','wall'] as const).filter(kind=>shown.marks.some(m=>m.kind===kind)).map(kind=><span key={kind}><i className={kind}/> {symbols[kind]}</span>)}
   </div>:<p className="muted">Baneplassholder · ingen illustrasjon lagt inn</p>}
-  {diagram===originalDiagram&&<div className="row wrap"><button aria-pressed={after} onClick={()=>setAfter(!after)}>{after?'Vis startposisjoner':'Vis den nye tomme plassen'}</button>{after&&<p className="muted">Spiller 1 har løpt til tom kjegle. Kjegla ved spillerens startposisjon er nå ledig.</p>}</div>}</div>;
+  {steps&&diagram===originalDiagram&&<div className="row wrap"><button aria-pressed={after} onClick={()=>setAfter(!after)}>{after?'Vis startposisjoner':'Vis den nye tomme plassen'}</button>{after&&<p className="muted">Spiller 1 har løpt til tom kjegle. Kjegla ved spillerens startposisjon er nå ledig.</p>}</div>}</div>;
 }
 export function DiagramEditor({initial,onSave,onClose}:{initial?:Diagram;onSave:(d:Diagram)=>void;onClose:()=>void}){
   const [history,setHistory]=useState(()=>({frames:[structuredClone(initial??blankDiagram)],index:0}));
@@ -144,7 +132,7 @@ export function DiagramEditor({initial,onSave,onClose}:{initial?:Diagram;onSave:
       <label>Valgt element<select value={mark||arrow?selected:''} onChange={e=>select(e.target.value)}><option value="">Ingen</option>{d.marks.map((m,i)=><option key={m.id} value={m.id}>{i+1}. {symbols[m.kind]} {m.label}</option>)}{d.arrows.map((a,i)=><option key={a.id} value={a.id}>Pil {i+1} – {arrowLabels[a.kind]}</option>)}</select></label>
       {mark&&<><label>Merkelapp<input value={mark.label} maxLength={24} onChange={e=>set({...d,marks:d.marks.map(m=>m.id===mark.id?{...m,label:e.target.value}:m)})}/></label>{(['x','y'] as const).map(axis=><label key={axis}>{axis.toUpperCase()}<input type="number" min="0" max="100" value={mark[axis]} onChange={e=>set({...d,marks:d.marks.map(m=>m.id===mark.id?{...m,[axis]:Math.min(100,Math.max(0,Number(e.target.value)))}:m)})}/></label>)}</>}
       {mark?.kind==='player'&&<label>Valgt spillers rolle<select value={mark.team} onChange={e=>set({...d,marks:d.marks.map(m=>m.id===mark.id?{...m,team:Number(e.target.value) as 0|1}:m)})}><option value="0">Angrep</option><option value="1">Forsvar</option></select></label>}
-      {arrow&&<><label>Piltype<select value={arrow.kind} onChange={e=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,kind:e.target.value as typeof a.kind}:a)})}>{Object.entries(arrowLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>{(['from','to','bend'] as const).map(point=><fieldset key={point}><legend>{point==='from'?'Start':point==='to'?'Slutt':'Buepunkt'}</legend>{(['x','y'] as const).map(axis=><label key={axis}>{axis.toUpperCase()}<input type="number" min="0" max="100" value={(arrow[point]??{x:50,y:50})[axis]} onChange={e=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,[point]:{...(a[point]??{x:50,y:50}),[axis]:Math.min(100,Math.max(0,Number(e.target.value)))}}:a)})}/></label>)}</fieldset>)}<button onClick={()=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,bend:undefined}:a)})}>Rett pil</button></>}
+      {arrow&&<><button onClick={()=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,via:[...(a.via??[]),{x:50,y:50}]}:a)})}>Legg til knekkpunkt</button>{arrow.via?.map((point,i)=><fieldset key={i}><legend>Knekkpunkt {i+1}</legend>{(['x','y'] as const).map(axis=><label key={axis}>{axis}<input type="number" min="0" max="100" value={point[axis]} onChange={e=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,via:a.via!.map((p,n)=>n===i?{...p,[axis]:Math.max(0,Math.min(100,Number(e.target.value)))}:p)}:a)})}/></label>)}<button onClick={()=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,via:a.via!.filter((_,n)=>n!==i)}:a)})}>Fjern knekkpunkt</button></fieldset>)}<label>Piltype<select value={arrow.kind} onChange={e=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,kind:e.target.value as typeof a.kind}:a)})}>{Object.entries(arrowLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>{(['from','to','bend'] as const).map(point=><fieldset key={point}><legend>{point==='from'?'Start':point==='to'?'Slutt':'Buepunkt'}</legend>{(['x','y'] as const).map(axis=><label key={axis}>{axis.toUpperCase()}<input type="number" min="0" max="100" value={(arrow[point]??{x:50,y:50})[axis]} onChange={e=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,[point]:{...(a[point]??{x:50,y:50}),[axis]:Math.min(100,Math.max(0,Number(e.target.value)))}}:a)})}/></label>)}</fieldset>)}<button onClick={()=>set({...d,arrows:d.arrows.map(a=>a.id===arrow.id?{...a,bend:undefined}:a)})}>Rett pil</button></>}
       {(mark||arrow)&&<button onClick={()=>{const id=uid();set(mark?{...d,marks:[...d.marks,{...mark,id,x:Math.min(100,mark.x+4),y:Math.min(100,mark.y+4)}]}:{...d,arrows:[...d.arrows,{...structuredClone(arrow!),id}]});select(id);}}>Dupliser element</button>}
       {(mark||arrow)&&<button onClick={()=>{set({...d,marks:d.marks.filter(m=>m.id!==selected),arrows:d.arrows.filter(a=>a.id!==selected)});select('');}}>Fjern element</button>}
     </div>

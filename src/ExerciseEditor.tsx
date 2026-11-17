@@ -1,3 +1,4 @@
+import {planningMeta,planningLabels,type PlanningMeta} from './planningMeta';
 import {useState} from 'react';
 import {halls,section,type Exercise,type ExerciseMeta} from './model';
 import {editorial,skillNames,typeNames} from './catalog';
@@ -19,6 +20,7 @@ export function ExerciseEditor({exercise,metadata,onSave,onClose}:{exercise:Exer
   const [minutes,setMinutes]=useState(initial.minutes?.join('–')??'');
   const [coaches,setCoaches]=useState(initial.coaches?.toString()??'');
   const [error,setError]=useState('');
+  const [planning,setPlanning]=useState<PlanningMeta>(planningMeta(initial));
   function parseRange(text:string){
     if(!text.trim())return undefined;
     const m=/^\s*(\d+)\s*(?:[–-]\s*(\d+))?\s*$/.exec(text);
@@ -33,7 +35,7 @@ export function ExerciseEditor({exercise,metadata,onSave,onClose}:{exercise:Exer
       if(own&&!title.trim())throw new Error('Gi øvelsen et navn.');
       const coachCount=coaches?Number(coaches):undefined;
       if(coachCount!==undefined&&(!Number.isSafeInteger(coachCount)||coachCount<1))throw new Error('Antall trenere må være et positivt heltall.');
-      const meta:ExerciseMeta={categories:csv(category),skillTags:skills,types,players:parseRange(players),minutes:parseRange(minutes),halls:rooms,coaches:coachCount};
+      const meta:ExerciseMeta={...planning,categories:csv(category),skillTags:skills,types,players:parseRange(players),minutes:parseRange(minutes),halls:rooms,coaches:coachCount};
       const updated=own?{...exercise,...meta,title:title.trim(),categories:meta.categories??[],sections:[...blocks.map(label=>({label,lines:lines(values[label])})).filter(s=>s.lines.length),...exercise.sections.filter(s=>!blocks.includes(s.label))]}:undefined;
       const defined=Object.fromEntries(Object.entries(meta).filter(([,value])=>value!==undefined));
       if(onSave(defined,updated))onClose();
@@ -50,6 +52,7 @@ export function ExerciseEditor({exercise,metadata,onSave,onClose}:{exercise:Exer
       <label>Varighet i minutter<input value={minutes} placeholder="F.eks. 8–15" onChange={e=>setMinutes(e.target.value)}/></label>
       <label>Antall trenere<input type="number" min="1" value={coaches} onChange={e=>setCoaches(e.target.value)}/></label>
     </div>
+<details><summary>Planleggingsopplysninger og vurderinger</summary><p>La ukjente felt stå tomme. Dine endringer merkes som redaksjonell vurdering.</p><div className="fields">{Object.entries(planningLabels).map(([raw,label])=>{const key=raw as keyof typeof planningLabels;const value=planning[key];const change=(v:unknown)=>setPlanning(p=>({...p,[key]:v,provenance:{...p.provenance,[key]:'Redaksjonell vurdering'}}));const options=key==='activity'||key==='queue'?['lav','middels','høy']:key==='complexity'?['enkel','middels','krevende']:key==='oneCoach'||key==='independent'?['Ja','Nei']:null;return <label key={key}>{label}{options?<select value={typeof value==='boolean'?value?'Ja':'Nei':value===undefined?'':String(value)} onChange={e=>change(e.target.value===''?undefined:key==='oneCoach'||key==='independent'?e.target.value==='Ja':e.target.value)}><option value="">Ukjent</option>{options.map(o=><option key={o}>{o}</option>)}</select>:<input value={Array.isArray(value)?value.join(', '):value===undefined?'':String(value)} onChange={e=>change(!e.target.value?undefined:key==='stations'||key==='setupMinutes'?Number(e.target.value):['secondarySkills','equipment','differentiation'].includes(key)?csv(e.target.value):e.target.value)}/>}</label>;})}</div></details>
     {own&&blocks.map(label=><label key={label}>{label}<textarea value={values[label]} onChange={e=>setValues({...values,[label]:e.target.value})}/></label>)}
     {error&&<p role="alert">{error}</p>}
     <div className="row wrap"><button className="primary">Lagre {own?'øvelse':'metadata'}</button><button type="button" onClick={onClose}>Avbryt</button></div>
