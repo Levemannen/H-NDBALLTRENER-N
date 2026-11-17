@@ -1,7 +1,7 @@
 import {useMemo,useState} from 'react';
 import {Bookmark,ChevronLeft,ChevronRight,Clipboard,Search,SlidersHorizontal,Target,Timer,Users,TrafficCone} from 'lucide-react';
 import raw from './bank.json';
-import {type Data,type Exercise,type Annotation,halls,intro,norm,section,uid} from './model';
+import {type Data,type Exercise,type Annotation,halls,intro,norm,section,uid,hallFits} from './model';
 import {Court,DiagramCard,DiagramEditor,diagramFor} from './Court';
 import {editorial,searchBank,skillNames,typeNames} from './catalog';
 import {ExerciseEditor} from './ExerciseEditor';
@@ -9,10 +9,12 @@ import {ExerciseEditor} from './ExerciseEditor';
 export const standard:Exercise[]=raw.exercises;
 const difficulty=['Lett','Middels','Krevende'];
 export const annotation:Annotation={note:'',variant:'',difficulty:''};
-export function ExercisePicker({exercises,onSelect}:{exercises:Exercise[];onSelect:(e:Exercise)=>void}){
+export function ExercisePicker({exercises,onSelect,favorites=[]}:{exercises:Exercise[];favorites?:string[];onSelect:(e:Exercise)=>void}){
   const [q,set]=useState('');
-  const filtered=searchBank(exercises.filter(e=>!e.unresolved),q);
-  return <div className="stack"><label>Søk etter øvelser<input type="search" value={q} onChange={e=>set(e.target.value)} placeholder="Navn, kategori eller ferdighet"/></label><div className="picker">{filtered.map(e=><button key={e.id} type="button" onClick={()=>onSelect(e)}>{e.title}<span>{e.minutes?e.minutes.join('–')+' min':'Velg'} <ChevronRight size={16}/></span></button>)}{!filtered.length&&<p>Ingen treff.</p>}</div></div>;
+  const [favorite,setFavorite]=useState(false);
+  const [category,setCategory]=useState('');
+  const filtered=searchBank(exercises.filter(e=>!e.unresolved&&(!favorite||favorites.includes(e.id))&&(!category||e.categories.includes(category))),q);
+  return <div className="stack"><label>Søk etter øvelser<input type="search" value={q} onChange={e=>set(e.target.value)} placeholder="Navn, kategori eller ferdighet"/></label><label>Kategori<select value={category} onChange={e=>setCategory(e.target.value)}><option value="">Alle</option>{[...new Set(exercises.flatMap(e=>e.categories))].map(c=><option key={c}>{c}</option>)}</select></label><label className="check"><input type="checkbox" checked={favorite} onChange={e=>setFavorite(e.target.checked)}/> Favoritter</label><p>{filtered.length} treff</p><div className="picker">{filtered.map(e=><button key={e.id} type="button" onClick={()=>onSelect(e)}>{e.title}<small>{intro(e)}</small><span>{e.minutes?e.minutes.join('–')+' min':'Velg'} <ChevronRight size={16}/></span></button>)}{!filtered.length&&<p>Ingen treff.</p>}</div></div>;
 }
 export const emptyFilters={q:'',category:'',skill:'',type:'',players:'',hall:'',minutes:'',coaches:'',difficulty:'',equipment:'',favorite:false};
 export function Bank({exercises,data,update,add,notify,filter,set}:{exercises:Exercise[];data:Data;update:(fn:(d:Data)=>Data)=>boolean;add:(e:Exercise)=>void;notify:(message:string)=>void;filter:typeof emptyFilters;set:(filters:typeof emptyFilters)=>void}){
@@ -23,7 +25,7 @@ export function Bank({exercises,data,update,add,notify,filter,set}:{exercises:Ex
   const cats=useMemo(()=>[...new Set(catalog.flatMap(e=>e.categories))].sort((a,b)=>a.localeCompare(b,'nb')),[catalog]);
   const filtered=useMemo(()=>searchBank(catalog,filter.q).filter(e=>{
     const meta=editorial(e);
-    return (!filter.category||e.categories.includes(filter.category))&&(!filter.skill||meta.skills.includes(filter.skill))&&(!filter.type||meta.types.includes(filter.type))&&(!filter.players||(e.players&&Number(filter.players)>=e.players[0]&&Number(filter.players)<=e.players[1]))&&(!filter.minutes||(e.minutes&&Number(filter.minutes)>=e.minutes[0]&&Number(filter.minutes)<=e.minutes[1]))&&(!filter.hall||e.halls?.includes(filter.hall))&&(!filter.coaches||meta.coaches===Number(filter.coaches))&&(!filter.equipment||norm(section(e,'Du trenger').join(' ')).includes(norm(filter.equipment)))&&(!filter.difficulty||data.notes[e.id]?.difficulty===filter.difficulty)&&(!filter.favorite||data.favorites.includes(e.id));
+    return (!filter.category||e.categories.includes(filter.category))&&(!filter.skill||meta.skills.includes(filter.skill))&&(!filter.type||meta.types.includes(filter.type))&&(!filter.players||(e.players&&Number(filter.players)>=e.players[0]&&Number(filter.players)<=e.players[1]))&&(!filter.minutes||(e.minutes&&Number(filter.minutes)>=e.minutes[0]&&Number(filter.minutes)<=e.minutes[1]))&&(!filter.hall||hallFits(e.halls,filter.hall))&&(!filter.coaches||meta.coaches===undefined||meta.coaches<=Number(filter.coaches))&&(!filter.equipment||norm(section(e,'Du trenger').join(' ')).includes(norm(filter.equipment)))&&(!filter.difficulty||data.notes[e.id]?.difficulty===filter.difficulty)&&(!filter.favorite||data.favorites.includes(e.id));
   }),[catalog,data.notes,data.favorites,filter]);
   return <div className="page stack">
     <div className="heading row between"><h1>Øvelsesbank</h1><button onClick={()=>setCreate(!create)}>{create?'Lukk':'Ny øvelse'}</button></div>
@@ -36,10 +38,10 @@ export function Bank({exercises,data,update,add,notify,filter,set}:{exercises:Ex
     <label className="search"><Search size={21}/><input aria-label="Søk i øvelsesbanken" type="search" placeholder="Søk etter en øvelse" value={filter.q} onChange={e=>set({...filter,q:e.target.value})}/></label>
     <details className="panel"><summary><SlidersHorizontal size={20}/> Filtre</summary><div className="fields">
       {([['category','Kategori',cats],['skill','Ferdighet',skillNames],['type','Øvelsestype',typeNames],['hall','Hallstørrelse',halls],['difficulty','Egen vanskelighetsgrad',difficulty]] as const).map(([k,label,options])=><label key={k}>{label}<select value={filter[k]} onChange={e=>set({...filter,[k]:e.target.value})}><option value="">Alle</option>{options.map(o=><option key={o}>{o}</option>)}</select></label>)}
-      {([['players','Antall spillere'],['minutes','Varighet i minutter'],['coaches','Oppgitt antall trenere'],['equipment','Utstyr']] as const).map(([k,label])=><label key={k}>{label}<input type={k==='equipment'?'search':'number'} min="1" value={filter[k]} onChange={e=>set({...filter,[k]:e.target.value})}/></label>)}
+      {([['players','Antall spillere'],['minutes','Varighet i minutter'],['coaches','Tilgjengelige trenere'],['equipment','Utstyr']] as const).map(([k,label])=><label key={k}>{label}<input type={k==='equipment'?'search':'number'} min="1" value={filter[k]} onChange={e=>set({...filter,[k]:e.target.value})}/></label>)}
     </div></details>
     <div className="row between wrap"><p className="muted" aria-live="polite">{filtered.length} øvelser</p><div className="row wrap"><label className="check"><input type="checkbox" checked={filter.favorite} onChange={e=>set({...filter,favorite:e.target.checked})}/> Favoritter</label>{Object.values(filter).some(Boolean)&&<button onClick={()=>set(emptyFilters)}>Nullstill søk og filtre</button>}</div></div>
-    <div className="cards">{filtered.map(e=>{
+    <p className="muted">Hall og trenerfilter inkluderer øvelser med ukjente krav. Kontroller organiseringen før bruk.</p><div className="cards">{filtered.map(e=>{
       const diagram=diagramFor(e.id,data.diagrams);
       const favorite=data.favorites.includes(e.id);
       return <article className="panel exercise-card" key={e.id}>
@@ -66,11 +68,11 @@ export function Lines({lines}:{lines:string[]}){
 export function Focus({lines}:{lines:string[]}){
   return !!lines.length&&<div className="focus"><Target size={30}/><div><h3>Trenerfokus</h3><Lines lines={lines.map(l=>l.replace(/^👉\s*/,''))}/></div></div>;
 }
-export function QuickExercise({e,data}:{e:Exercise;data:Data}){
+export function QuickExercise({e,data,variant:selectedVariant}:{e:Exercise;data:Data;variant?:string}){
   const rules=section(e,'Slik gjør dere');
-  const variant=e.id==='master-16'?e.sections.find(s=>s.label.startsWith('Variant – uten rekker'))?.lines:undefined;
+  const variant=selectedVariant!==undefined?e.sections.find(s=>s.label===selectedVariant)?.lines:e.id==='master-16'?e.sections.find(s=>s.label.startsWith('Variant – uten rekker'))?.lines:undefined;
   const focus=variant?.filter(line=>line.startsWith('Variantfokus:')).map(line=>line.replace('Variantfokus: ',''))??section(e,'Trenerens fokus');
-  return <div className="stack"><DiagramCard diagram={diagramFor(e.id,data.diagrams)}/><div><h2>{variant?'Varianten med én tom kjegle':'Slik gjør dere'}</h2><Lines lines={variant?.filter(line=>!line.startsWith('Variantfokus:'))??(rules.length?rules:section(e,'Kort forklart'))}/></div><Focus lines={focus}/></div>;
+  return <div className="stack"><DiagramCard diagram={diagramFor(e.id,data.diagrams)}/><div><h2>{variant?(selectedVariant||'Varianten med én tom kjegle'):'Slik gjør dere'}</h2><Lines lines={variant?.filter(line=>!line.startsWith('Variantfokus:'))??(rules.length?rules:section(e,'Kort forklart'))}/></div><Focus lines={focus}/></div>;
 }
 export function Detail({e,data,update,add,notify}:{e:Exercise;data:Data;update:(fn:(d:Data)=>Data)=>boolean;add:(e:Exercise)=>void;notify:(message:string)=>void}){
   const [quick,setQuick]=useState(false);

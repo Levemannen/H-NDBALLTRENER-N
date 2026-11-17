@@ -27,10 +27,10 @@ details>.button{margin-top:.8rem}
 main{flex:1;padding-bottom:28px;min-width:0}
 .brand{background:linear-gradient(125deg,#103e7c,#0a2e64 65%,#0c346d);color:#fff;min-height:64px;display:flex;align-items:center;position:relative;overflow:hidden;padding:12px clamp(16px,4vw,40px)}
 .brand a{display:flex;align-items:center;justify-content:center;gap:.75rem;text-decoration:none;font-weight:760;font-size:.75rem;line-height:1.1;letter-spacing:.09em;z-index:1}
-.crest{display:grid;place-items:center;background:#fff;color:#dc232b;font-weight:900;font-style:italic;letter-spacing:-.055em;outline:2px solid #fff;border:3px solid #103770;border-radius:50%;width:64px;height:32px;font-size:1.35rem}
+.club-logo{display:block;width:72px;height:auto;background:white;padding:5px;border-radius:5px;object-fit:contain}
 .hero{min-height:187px;justify-content:center;padding-bottom:28px}
 .hero a{font-size:clamp(1rem,4.7vw,1.8rem);gap:1rem}
-.hero .crest{width:clamp(90px,25vw,146px);height:clamp(46px,13vw,72px);font-size:clamp(2rem,8vw,3.15rem);border-width:5px;outline-width:3px}
+.hero .club-logo{width:clamp(100px,27vw,150px);padding:8px}
 .ribbon{position:absolute;pointer-events:none;inset:auto 0 -1px;width:100%;height:67px}
 .home,.page{width:100%;max-width:970px;margin:auto;padding:24px clamp(14px,4vw,34px)}
 .home{display:grid;align-content:start;gap:16px}
@@ -120,3 +120,7 @@ fieldset legend{font-weight:650}
 @media(min-width:800px){.exercise-page .detail{padding-top:24px}.exercise-page .detail-nav{margin-inline:0;border-radius:12px}}
 @media(min-width:850px){.plan-columns{grid-template-columns:minmax(300px,2fr) minmax(0,3fr)}.plan-picker{position:sticky;top:12px}.plan-picker .picker{max-height:50vh}}
 @media(prefers-reduced-motion:no-preference){.home-card,.exercise-card{transition:border-color .15s,background-color .15s}}
+
+.picker small{display:block;font-weight:400;white-space:normal;text-align:left}.notice .row{margin-top:8px}.player-row{flex-wrap:wrap}input,select,textarea{max-width:100%;min-width:0}.panel,.fields>*{min-width:0}.picker button{white-space:normal}.court.move-tool{touch-action:none}
+
+.draft-status{padding:12px 16px;border-bottom:1px solid var(--line);background:#edf5fc;font-size:.9rem}.draft-status p{margin:0 0 6px}.draft-status details .row{margin-top:10px}
