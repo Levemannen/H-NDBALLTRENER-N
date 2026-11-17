@@ -1,10 +1,13 @@
+import {planningMeta,planningLabels} from './planningMeta';
 import {useMemo,useState} from 'react';
 import {Bookmark,ChevronLeft,ChevronRight,Clipboard,Search,SlidersHorizontal,Target,Timer,Users,TrafficCone} from 'lucide-react';
 import raw from './bank.json';
 import {type Data,type Exercise,type Annotation,halls,intro,norm,section,uid,hallFits} from './model';
-import {Court,DiagramCard,DiagramEditor,diagramFor} from './Court';
+import {Court,diagramFor} from './Court';
 import {editorial,searchBank,skillNames,typeNames} from './catalog';
 import {ExerciseEditor} from './ExerciseEditor';
+import {Illustration,illustration} from './Illustration';
+import {chosenVariant,variants} from './variants';
 
 export const standard:Exercise[]=raw.exercises;
 const difficulty=['Lett','Middels','Krevende'];
@@ -28,7 +31,7 @@ export function Bank({exercises,data,update,add,notify,filter,set}:{exercises:Ex
     return (!filter.category||e.categories.includes(filter.category))&&(!filter.skill||meta.skills.includes(filter.skill))&&(!filter.type||meta.types.includes(filter.type))&&(!filter.players||(e.players&&Number(filter.players)>=e.players[0]&&Number(filter.players)<=e.players[1]))&&(!filter.minutes||(e.minutes&&Number(filter.minutes)>=e.minutes[0]&&Number(filter.minutes)<=e.minutes[1]))&&(!filter.hall||hallFits(e.halls,filter.hall))&&(!filter.coaches||meta.coaches===undefined||meta.coaches<=Number(filter.coaches))&&(!filter.equipment||norm(section(e,'Du trenger').join(' ')).includes(norm(filter.equipment)))&&(!filter.difficulty||data.notes[e.id]?.difficulty===filter.difficulty)&&(!filter.favorite||data.favorites.includes(e.id));
   }),[catalog,data.notes,data.favorites,filter]);
   return <div className="page stack">
-    <div className="heading row between"><h1>Øvelsesbank</h1><button onClick={()=>setCreate(!create)}>{create?'Lukk':'Ny øvelse'}</button></div>
+    <a className="button" href="#/fem-min">5 min til overs</a><div className="heading row between"><h1>Øvelsesbank</h1><button onClick={()=>setCreate(!create)}>{create?'Lukk':'Ny øvelse'}</button></div>
     {create&&<form className="panel stack" onSubmit={event=>{
       event.preventDefault();
       if(!title.trim())return;
@@ -70,13 +73,14 @@ export function Focus({lines}:{lines:string[]}){
 }
 export function QuickExercise({e,data,variant:selectedVariant}:{e:Exercise;data:Data;variant?:string}){
   const rules=section(e,'Slik gjør dere');
-  const variant=selectedVariant!==undefined?e.sections.find(s=>s.label===selectedVariant)?.lines:e.id==='master-16'?e.sections.find(s=>s.label.startsWith('Variant – uten rekker'))?.lines:undefined;
-  const focus=variant?.filter(line=>line.startsWith('Variantfokus:')).map(line=>line.replace('Variantfokus: ',''))??section(e,'Trenerens fokus');
-  return <div className="stack"><DiagramCard diagram={diagramFor(e.id,data.diagrams)}/><div><h2>{variant?(selectedVariant||'Varianten med én tom kjegle'):'Slik gjør dere'}</h2><Lines lines={variant?.filter(line=>!line.startsWith('Variantfokus:'))??(rules.length?rules:section(e,'Kort forklart'))}/></div><Focus lines={focus}/></div>;
+  const variant=selectedVariant!==undefined?chosenVariant(e,selectedVariant)?.description:e.id==='master-16'?e.sections.find(s=>s.label.startsWith('Variant – uten rekker'))?.lines:undefined;
+  const variantFocus=variant?.filter(line=>line.startsWith('Variantfokus:')).map(line=>line.replace('Variantfokus: ',''));
+  const focus=variantFocus?.length?variantFocus:section(e,'Trenerens fokus');
+  return <div className="stack"><Illustration e={e} data={data} variant={selectedVariant}/><div><h2>{variant?(chosenVariant(e,selectedVariant)?.name||'Varianten med én tom kjegle'):'Slik gjør dere'}</h2><Lines lines={variant?.filter(line=>!line.startsWith('Variantfokus:'))??(rules.length?rules:section(e,'Kort forklart'))}/></div><Focus lines={focus}/></div>;
 }
 export function Detail({e,data,update,add,notify}:{e:Exercise;data:Data;update:(fn:(d:Data)=>Data)=>boolean;add:(e:Exercise)=>void;notify:(message:string)=>void}){
   const [quick,setQuick]=useState(false);
-  const [editing,setEditing]=useState(false);
+  const [selectedDiagramVariant,setSelectedDiagramVariant]=useState(e.id==='master-16'?variants(e)[0]?.id??'':'');
   const [editingMetadata,setEditingMetadata]=useState(false);
   const note=data.notes[e.id]??annotation;
   const favorite=data.favorites.includes(e.id);
@@ -90,7 +94,7 @@ export function Detail({e,data,update,add,notify}:{e:Exercise;data:Data;update:(
   function duplicate(){
     const id='egen-'+uid();
     const copy:Exercise={id,title:e.title+' – kopi',categories:shown.categories,skills:shown.skills,skillTags:shown.skillTags,types:shown.types,players:shown.players,minutes:shown.minutes,halls:shown.halls,coaches:shown.coaches,sections:structuredClone(e.sections)};
-    if(update(d=>({...d,exercises:[...d.exercises,copy],diagrams:diagram?{...d.diagrams,[id]:structuredClone(diagram)}:d.diagrams}))){
+    if(update(d=>({...d,exercises:[...d.exercises,copy],diagrams:diagram?{...d.diagrams,[id]:structuredClone(diagram)}:d.diagrams,diagramSteps:illustration(e,data,selectedDiagramVariant).frames.length?{...d.diagramSteps,[id]:structuredClone(illustration(e,data,selectedDiagramVariant).frames)}:d.diagramSteps}))){
       notify('Egen øvelse opprettet');
       location.hash='/ovelse/'+id;
     }
@@ -100,9 +104,7 @@ export function Detail({e,data,update,add,notify}:{e:Exercise;data:Data;update:(
     <div className="heading"><span className="chip">{shown.categories.slice(0,3).join(' / ')||'Øvelse'}</span><h1>{e.title}</h1>{e.number&&<p className="muted">Øvelse {e.number} · Master v3</p>}{e.unresolved&&<p className="muted">Merket som uavklart i kilden</p>}</div>
     <div className="row wrap">{!e.unresolved&&<button className="primary" onClick={()=>add(shown)}>Legg til i trening</button>}<button onClick={()=>setQuick(!quick)}>{quick?'Full visning':'Hurtigvisning'}</button></div>
     {quick?<QuickExercise e={e} data={data}/>:<>
-      <DiagramCard diagram={diagram}/>
-      {e.id==='master-16'&&<p className="muted">Illustrasjonen viser varianten med én tom kjegle.</p>}
-      {editing?<DiagramEditor initial={diagram} onClose={()=>setEditing(false)} onSave={d=>{if(update(s=>({...s,diagrams:{...s.diagrams,[e.id]:d}}))){setEditing(false);notify('Illustrasjon lagret');}}}/>:<button onClick={()=>setEditing(true)}>{diagram?'Rediger illustrasjon':'Lag illustrasjon'}</button>}
+      <label>Illustrasjon for<select value={selectedDiagramVariant} onChange={event=>setSelectedDiagramVariant(event.target.value)}><option value="">Grunnøvelse</option>{variants(e).map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label><Illustration key={selectedDiagramVariant} e={e} data={data} update={update} variant={selectedDiagramVariant}/>
       {(e.meta||equipment.length>0)&&<div className="meta">{e.players&&<div><Users/><span><strong>{e.players.join('–')}</strong><br/>{e.meta?.includes('keepere')?'keepere':'spillere'}</span></div>}{e.minutes&&<div><Timer/><span><strong>{e.minutes.join('–')}</strong><br/>min</span></div>}{!!equipment.length&&<div><TrafficCone/><span>{equipment.join(' ')}</span></div>}</div>}
       {e.meta&&<p className="muted">{e.meta}</p>}
       {note.metadata&&<div className="muted"><strong>Egne metadata</strong><p>{[shown.players&&shown.players.join('–')+' spillere',shown.minutes&&shown.minutes.join('–')+' min',shown.halls?.length&&shown.halls.join(', '),shown.coaches&&shown.coaches+' trener(e)'].filter(Boolean).join(' · ')}</p></div>}
@@ -112,7 +114,7 @@ export function Detail({e,data,update,add,notify}:{e:Exercise;data:Data;update:(
       {!!rules.length&&<div><h2>Slik gjør dere</h2><Lines lines={rules}/></div>}
       <Focus lines={focus}/>
       {sections.map((s,i)=><details className="panel" key={i} open={s.label.startsWith('Variant – uten rekker')||undefined}><summary>{s.label||'Merknad'}</summary><Lines lines={s.lines}/></details>)}
-      <details className="panel"><summary>Egne opplysninger</summary><div className="stack">
+      <details className="panel"><summary>Planleggingsgrunnlag</summary><p>Spillerantall, varighet, hall og utstyr over er fra kilden. Vurderinger nedenfor er veiledning.</p>{Object.entries(planningLabels).map(([key,label])=>{const meta=planningMeta(shown),value=meta[key as keyof typeof planningLabels];return <p key={key}><strong>{label}:</strong> {value===undefined?'Ukjent':Array.isArray(value)?value.join(', '):typeof value==='boolean'?value?'Ja':'Nei':value} · {meta.provenance?.[key]??(value===undefined?'Ukjent':'Redaksjonell vurdering')}</p>;})}</details><details className="panel"><summary>Egne opplysninger</summary><div className="stack">
         <label>Egne notater<textarea value={note.note} onChange={event=>setNote({note:event.target.value})}/></label>
         <label>Egen variant<textarea value={note.variant} onChange={event=>setNote({variant:event.target.value})}/></label>
         <label>Egen vanskelighetsgrad<select value={note.difficulty} onChange={event=>setNote({difficulty:event.target.value})}><option value="">Ikke angitt</option>{difficulty.map(v=><option key={v}>{v}</option>)}</select></label>

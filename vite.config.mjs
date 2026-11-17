@@ -8,7 +8,7 @@ if(!/^\d+\.\d+\.\d+$/.test(version))throw new Error('Appversjonen må være på 
 export default defineConfig({
   define:{__APP_VERSION__:JSON.stringify(version)},
   base:'./',
-  build:{rollupOptions:{output:{manualChunks(id){if(id.endsWith('/src/bank.json'))return 'exercise-bank';}}}},
+  build:{rollupOptions:{output:{manualChunks(id){if(id.endsWith('/src/bank.json'))return 'exercise-bank';if(id.endsWith('/src/illustrations.json'))return 'illustrations';if(id.includes('@supabase/'))return 'sync';}}}},
   plugins:[{
     name:'handball-offline',
     apply:'build',

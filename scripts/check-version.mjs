@@ -8,4 +8,4 @@ assert.equal(published.version,version,'Byggets versjon må samsvare med package
 const assets=new URL('dist/assets/',root);
 const app=readdirSync(assets).filter(name=>/^index-.*\.js$/.test(name));
 assert.ok(app.some(name=>readFileSync(new URL(name,assets),'utf8').includes(JSON.stringify(version))), 'Appens versjonsnummer mangler i produksjonsbygget.');
-console.log(`Kontrollert appversjon: ${version} (lokalt bygg og GitHub Pages)`);
+console.log(`Kontrollert appversjon: ${version} (package.json, versjonsfil og appkode i produksjonsbygget)`);

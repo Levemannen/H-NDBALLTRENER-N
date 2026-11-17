@@ -1,0 +1,11 @@
+import {useState} from 'react';
+import {activeTeam,addTeam,archiveTeam,type Workspace,type Settings} from './workspace';
+import {halls} from './model';
+export function TeamSettings({workspace,change}:{workspace:Workspace;change:(fn:(w:Workspace)=>Workspace)=>boolean}){
+ const [name,setName]=useState(''),[error,setError]=useState('');const team=activeTeam(workspace);
+ const patch=(value:Partial<Settings>)=>change(w=>({...w,teams:w.teams.map(t=>t.id===w.activeTeamId?{...t,settings:{...t.settings,...value}}:t)}));
+ function archive(id:string,flag:boolean){try{change(w=>archiveTeam(w,id,flag));setError('');}catch(e){setError((e as Error).message);}}
+ return <section className="page stack"><details className="panel"><summary>Mine lag og standardinnstillinger</summary><div className="stack"><form className="row wrap" onSubmit={e=>{e.preventDefault();if(name.trim()&&change(w=>addTeam(w,name)))setName('');}}><label>Nytt lag<input value={name} required onChange={e=>setName(e.target.value)}/></label><button>Opprett lag</button></form><button onClick={()=>{if(confirm('Arkivere '+team.name+'? Historikk og spillere beholdes.'))archive(team.id,true);}}>Arkiver aktivt lag</button>{workspace.teams.filter(t=>t.archived).map(t=><div key={t.id}>{t.name} <button onClick={()=>archive(t.id,false)}>Gjenaktiver lag</button></div>)}{error&&<p role="alert">{error}</p>}
+ <label className="check"><input type="checkbox" checked={workspace.personalize} onChange={e=>change(w=>({...w,personalize:e.target.checked}))}/> Bruk mine favoritter og godt vurderte økter i forslag (kan slås av)</label><h2>Standard for nye treninger</h2><div className="fields">{(['players','coaches','duration'] as const).map((key,i)=><label key={key}>{['Forventet antall spillere','Vanlig antall trenere','Varighet'][i]}<input type="number" min={key==='duration'?1:0} value={team.settings[key]} onChange={e=>patch({[key]:Math.max(key==='duration'?1:0,Number(e.target.value))})}/></label>)}<label>Hall<select value={team.settings.hall} onChange={e=>patch({hall:e.target.value})}>{halls.map(h=><option key={h}>{h}</option>)}</select></label><label>Aldersgruppe<input value={team.settings.age} onChange={e=>patch({age:e.target.value})}/></label><label>Vanlig treningsfokus<input value={team.settings.focus} onChange={e=>patch({focus:e.target.value})}/></label></div></div></details>
+</section>;
+}

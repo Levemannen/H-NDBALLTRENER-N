@@ -1,0 +1,12 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {illustration} from '../src/illustrationRegistry.ts';
+import {fresh,parseData} from '../src/model.ts';
+const bank=JSON.parse(readFileSync(new URL('../src/bank.json',import.meta.url))).exercises.filter(e=>e.number);
+const rows=bank.map(e=>({e,...illustration(e,fresh())}));
+if(rows.length!==122||rows.some(r=>!r.frames.length))throw new Error('Mangler hovedøvelser eller diagrammer');
+for(const r of rows)parseData(JSON.stringify({...fresh(),diagramSteps:{[r.e.id]:r.frames}}));
+const counts=Object.fromEntries(['Gjennomgått mot kilden','Til trenergjennomgang','Trenger avklaring'].map(status=>[status,rows.filter(r=>r.status===status).length]));
+const type=r=>r.status==='Trenger avklaring'?'Prinsippskisse':r.e.number===121?'Stasjonsdiagram':r.frames.length>1?'Trinnvis illustrasjon':r.frames.some(f=>f.marks.some(m=>m.team===1)&&f.arrows.some(a=>a.kind==='pass'))?'Angrep / forsvar':r.frames.some(f=>f.arrows.some(a=>a.kind==='run'||a.kind==='carry'))?'Bevegelsesdiagram':r.frames.some(f=>f.arrows.some(a=>a.kind==='pass'))?'Pasningsdiagram':'Organiseringsdiagram';
+const summary={mainExercises:rows.length,illustrated:rows.filter(r=>r.frames.length).length,multipleSteps:rows.filter(r=>r.frames.length>1).length,status:counts,technicalErrors:0};
+const text=['# Diagramrapport – Håndballtrener’n','',`Automatisk kontroll: ${summary.mainExercises} hovedøvelser, ${summary.illustrated} med illustrasjon, ${summary.multipleSteps} med flere trinn, 0 ugyldige diagramdata.`,...Object.entries(counts).map(([s,n])=>`- ${s}: ${n}`),'','Status beskriver gjennomgang mot Master v3, ikke uavhengig håndballfaglig godkjenning. Alle posisjoner er skjematiske. Egne overstyringer kommer i tillegg og er ikke med i denne rapporten. Øvelse 16 viser den dokumenterte varianten med tom kjegle som standard; grunnøvelsen har egen prinsippskisse.','', '| Nr. | Øvelse | Diagramtype | Trinn | Status | Merknad |','|---|---|---|---|---|---|',...rows.map(r=>`| ${r.e.number} | ${r.e.title} | ${type(r)} | ${r.frames.length} | ${r.status} | ${r.note.replaceAll('|','/')} |`),''].join('\n');
+writeFileSync(new URL('../DIAGRAMSTATUS.md',import.meta.url),text);console.log(JSON.stringify(summary,null,2));

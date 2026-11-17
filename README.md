@@ -1,10 +1,10 @@
-# Håndballtrener’n 2.1
+# Håndballtrener’n
 
-React/TypeScript/Vite-app for planlegging, øvelsesbank, hallmodus og lagdeling. Brukerdata lagres på enheten. Ingen server, konto eller ekstern KI kreves.
+Norsk React/TypeScript/Vite-app for håndballtrening, flere lag, SVG-øvelsesbank og offlinebruk. Appversjonen kommer kun fra package.json. Konto og ekstern KI er ikke nødvendig. Valgfri privat synkronisering er beskrevet i [SYNC.md](SYNC.md).
 
-## Kjøring og kvalitetssikring
+## Kjøring og tester
 
-Node.js 24, pnpm 11.25.0:
+Node.js 24 og pnpm 11.25.0:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -13,59 +13,56 @@ pnpm build
 pnpm dev
 ```
 
-Nettlesertester mot produksjonsbygget:
+Produksjonsbygging kontrollerer TypeScript og samsvar mellom package.json, appkode og dist/version.json. Samme kommando brukes lokalt og på GitHub Pages.
 
 ```sh
 pnpm exec playwright install chromium
 pnpm test:browser
+node scripts/diagram-report.mjs
 ```
 
-Testene starter en isolert lokal server under `/handball/` og bruker separate nettleserprofiler med syntetiske spillere. De bruker aldri spillerdata fra den vanlige nettleseren. `EDGE_PATH` kan peke til installert Edge. `SCREENSHOT_DIR` kan brukes for skjermbilder. Testene dekker 360, 390, 768 og 1280 px, utkast, treninger, oppmøte, lagdeling, arkivering, kopiering, eksport/import, timer, offline, fanekonflikter, SVG-redigering og service-worker-oppdatering.
+Nettlesertestene starter en isolert server under /handball/ og bruker syntetiske spillere. De åpner aldri den vanlige appens brukerdata. EDGE_PATH kan peke til Edge. SCREENSHOT_DIR lagrer skjermbilder ved 360, 390, 768 og 1280 px samt oversikter over alle 122 illustrasjoner. V3_ONLY, AUDIT_ONLY og SYNC_ONLY avgrenser feilsøking; full godkjenning bruker ingen av disse.
 
-## Nytt i 2.1
+## Nytt i 3.0-utgivelsen
 
-- Automatisk lagring av utkast med 450 ms forsinkelse, ekstra lagring ved skjuling/lukking, gjenoppretting, forkasting og eksport. Redigering av en lagret trening endrer bare utkastet frem til Lagre.
-- Validering før datalagring. Web Locks gjør at bare én fane kan redigere. Eksakt sammenligning av lagret verdi før skriving oppdager også endringer fra eldre appfaner. Andre faner åpnes skrivebeskyttet; lukk redigeringsfanen og last siden på nytt for å overta.
-- Arkivering og gjenaktivering bevarer historisk oppmøte og lagfordeling. Separat permanent sletting forklarer og fjerner referansene.
-- Lagdeling med lokale spillerbytter som forbedrer poengfordelingen, jevn lagstørrelse og deterministisk resultat. Direkte spillerbytte, flytting, navn og ønsket gruppestørrelse. Ny fordeling krever bekreftelse når en fordeling finnes.
-- Kopier og malbruk nullstiller oppmøte, lagfordeling og evaluering. Registrert oppmøte, også null, har forrang over forventet spillerantall.
-- Regelbaserte treningsforslag med faseinndeling, dokumenterte spiller-/tidsrammer og trenerkrav. Alternativforslag bruker felles ferdighet/kategori og kjente rammer. Ukjente krav behandles som ukjente.
-- Øvelsesvelger med kategori, favoritter og kortforklaring; duplisering, variantvalg, bytte, tid, kommentarer og rekkefølge. Valgt variant følger med til hallmodus.
-- Trenerfilter bruker tilgjengelig kapasitet. Gymsal og liten hall deler egnethetsgruppe; dette er en redaksjonell normalisering, ikke oppmåling av hallen.
-- SVG-editor har duplisering og redigerbare pilendepunkter/buepunkt, i tillegg til berøring, angre/gjør om, symboler og tekst.
-- Halltimer med ±2/5 minutter. Enkel Plan B for kildebasert nivåtilpasning og tidsjustering av gjeldende øvelse, med bekreftelse.
-- Oppdateringsknapp for nye offlineversjoner. Den aktive versjonen endres først ved brukerens valg. Utkast lagres før omlasting. Forrige ressurscache beholdes for åpne eldre faner.
-- Offisiell Vålerenga Håndball-logo og kvadratisk SVG-appikon med den originale logoen, tilgjengelig offline.
+- Aktivt lag står synlig øverst. Opprett, bytt, gi nytt navn, arkiver og gjenaktiver lag under Mitt lag. Hvert lag har egen spillerstall, nivåer, utkast, treninger, maler, regler, sesongplan og standardinnstillinger.
+- Oppmøte skiller mellom ikke registrert og null fremmøtte. Arkiverte spillere bevares i historikken, men velges ikke automatisk ved import. Kopier nullstiller oppmøte, evaluering og gjennomført-status.
+- Lagdeling støtter sammen, fra hverandre og låst lagnummer. Motstridende regler forklares. Manuelle regelbrudd må rettes før lagring. Uten regler brukes den etablerte balanseringsalgoritmen.
+- Konkrete variantvalg følger øvelsen til hallmodus og eksport. Sammenhengende progresjoner beholdes samlet. Egne diagramtrinn kan knyttes til en variant.
+- Forslag prioriterer enkle oppsett, aktivitet og lite kø ved én trener. Metadata skiller dokumenterte, redaksjonelt vurderte og ukjente egenskaper. Favoritter og godt vurderte økter gir valgfri lokal prioritering.
+- Plan B har oppmøteendring, kildebasert nivåtilpasning, alternativer, kø, tid og femminuttersbank. Originalplanen lagres ved første endring og kan gjenopprettes etter omlasting.
+- «5 minutter til overs» har de ni bestilte øvelsene. Samlingen kan endres uten å slette originaløvelser. Hurtigknapp finnes i bank, hallmodus og Plan B.
+- Del kort eller detaljert ren tekst: forhåndsvisning, kopiering, nettleserens delingsmeny og .txt. Spillerlister og individuelle nivåer utelates. Kontroller egne kommentarer før deling.
+- Ukeplan: tema, antall uker, treninger per uke og progresjon. Opprett redigerbare økter fra ukene. Historikk skiller gjennomført fra planlagt og er ikke en måling av spillerutvikling.
 
-## Databevaring
+## Data og migrering
 
-Lagringsnøkkelen er fortsatt `handballtrenern.v1`. Nye felt er valgfrie; eksisterende v1-data trenger ingen destruktiv konvertering. Øvelses-ID-er er uendret. Utkast ligger i `handballtrenern.draft.v1`. Eksport inkluderer utkast, lag, spillere, treninger, favoritter, notater, egne øvelser og illustrasjoner. Import validerer før erstatning og krever bekreftelse. Uleselige eksisterende data overskrives ikke automatisk. En redningskopi kan eksporteres fra feilmeldingen/utkastmenyen.
+handballtrenern.v3 inneholder alle lag og felles øvelsesdata i én validert skriving. Gamle nøkler handballtrenern.v1 og handballtrenern.draft.v1 leses ved første migrering og beholdes uendret som reserve. Gammel spillerstall og historikk knyttes samlet til første lag. Uleselige data overskrives ikke. Migreringsmeldingen tilbyr eksport; redningskopien inkluderer rå lagring og påbegynte endringer.
 
-Data følger nettleser og adresse, ikke GitHub-konto. Sikkerhetskopier må overføres privat mellom PC og telefon. Ingen faktiske spillerlister inngår i kildekoden.
+Utkast lagres etter 450 ms og ved skjuling/lukking. Lagbytte sikrer siste utkast. Web Locks og sammenligning av lagrede snapshots hindrer at faner overskriver hverandre. Andre redigeringsfaner åpnes skrivebeskyttet.
 
-## Kilde og diagrammer
+Backup under Mitt lag inkluderer alle lag, sesongplaner, økter, utkast, Plan B-originaler, regler, hurtigsamling, favoritter, notater, egne øvelser, diagrammer, trinn og status. Gamle 2.1-kopier kan importeres. Import validerer før bekreftet erstatning. Innloggingstoken inngår ikke i backup. Brukerdata skal overføres privat, aldri via offentlig repository.
 
-Banken har 205 unike oppføringer: 122 nummererte hovedøvelser, fire tilleggsbanker og 11 uavklarte oppføringer. Originaltekst og ID-er er bevart. Reimport fra brukerens Master v3-dokument 17. november 2026 ga ingen innholdsendringer. Originaltekst, redaksjonelle metadata og brukerens egne tilpasninger er separate.
+## Kilde og illustrasjoner
 
-Diagrammer finnes for 16, 20, 22, 23, 24, 26, 34, 48, 62, 66, 72, 85, 117, 119 og 120. De er prinsippskisser basert på kildebeskrivelsene, ikke målfaste oppsett eller en uavhengig trenerfaglig godkjenning. Øvelse 16 har to visningstrinn. Brukerillustrasjoner har forrang. Andre øvelser beholder en tydelig plassholder.
+Master v3 har 205 unike oppføringer: 122 hovedøvelser, fire tilleggsbanker og 11 uavklarte oppføringer. Originaltekst og etablerte ID-er er uendret. [DIAGRAMSTATUS.md](DIAGRAMSTATUS.md) viser status for samtlige 122 hovedøvelser.
 
-Logo: [Vålerenga Håndballs offisielle nettsted](https://www.vifhandball.no/), lagret i `public/valerenga-handball.png`.
+#/illustrasjoner viser alle hovedøvelser og trinn. Editor støtter fullskjerm, berøring, presise koordinater, nummerering, duplisering, buer, knekkpunkter, utstyrssymboler, flere trinn og angre/gjør om. Egne overstyringer har forrang og inngår i backup/synkronisering. Skisser er ikke målfaste eller uavhengig trenerfaglig godkjent.
 
-## Publisering
+Kildeleste oppsett ligger i scripts/diagram-recipes-*.mjs. Kommandoen node scripts/build-diagrams.mjs --write regenererer src/illustrations.json. De opprinnelige 15 diagrammene er videreført i src/diagrams.ts, med egen grunnskisse og variant for #16. Kildeendringer krever ny gjennomgang, ikke bare regenerering. Logoen er fra [Vålerenga Håndballs offisielle nettsted](https://www.vifhandball.no/) og ligger lokalt for offlinebruk.
 
-Arbeidsgren: `feature/handballtrener-2-1`. `check.yml` tester endringer og pull requests uten å publisere. `pages.yml` publiserer bare `main` eller manuelt startet workflow. Bygg bruker relative ressursstier og hash-ruting, også under `/H-NDBALLTRENER-N/`.
+## PWA og oppdatering
 
-Actions-versjoner er kontrollert mot offisielle utgivelser: [checkout 7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1), [setup-node 7.1.0](https://github.com/actions/setup-node/releases/tag/v7.1.0), [pnpm 6.1.1](https://github.com/pnpm/action-setup/releases/tag/v6.1.1), [configure-pages 6.0.0](https://github.com/actions/configure-pages/releases/tag/v6.0.0), [upload-pages-artifact 5.0.0](https://github.com/actions/upload-pages-artifact/releases/tag/v5.0.0), [deploy-pages 5.0.1](https://github.com/actions/deploy-pages/releases/tag/v5.0.1).
+Tidligere aktiv worker beholdt gammel HTML og ventet på manuell aktivering. ACTIVATE_UPDATE fantes allerede og er videreført. Appen sjekker ved oppstart, forgrunn, tilbakevendende nett og hvert femte aktive minutt. Manuell «Se etter oppdateringer» viser sist kontrollert.
 
-## Avgrensninger og videre arbeid
+Ny worker precacher hele bygget. På startsiden aktiveres ferdig oppdatering automatisk etter sikker lagring. I planlegging, editor og hallmodus tilbys «Oppdater nå» og «Senere». controllerchange utløser én omlasting etter aktivering. Lagringsfeil stanser automatisk aktivering.
 
-- Flere separate lag er ikke implementert. Dette trenger egen, testet migrering; dagens lag og historikk beholdes samlet.
-- Forslag tar ikke hensyn til en full utstyrsliste, aktivitetsnivå, kø, stasjonsantall eller låste spillere. Slike krav må registreres og kvalitetssikres først.
-- Plan B for færre spillere viser veien til oppmøteredigering; den gjør ikke automatisk om hele økten. Tidsjustering endrer gjeldende øvelse, ikke hele tidsbudsjettet.
-- Flere diagramtrinn for alle øvelser, pil med flere knekkpunkter og låsing av spillere er ikke implementert.
-- Nettlesertestene bruker Chromium/Edge. Fysisk Samsung-installasjon, Firefox på telefon og garanterte bakgrunnsalarmer er ikke verifisert.
-- Ny produksjonspublisering må verifiseres etter innfletting i main. En vellykket lokal bygging betyr ikke at GitHub Pages er oppdatert.
+Navigasjon prøver nettet med tidsgrense. En annen HTML-versjon vises først når ny workers komplette cache er klar, slik at bygg ikke blandes. Offline brukes eksisterende shell. Forrige cache beholdes for eldre faner. Android kan stanse lukkede apper; sjekken gjenopptas ved åpning. Ingen reinstallasjon inngår i normal oppdatering.
 
-## Versjonsnummer
+Chromium-testene simulerer nye JS-filnavn og ressursinnhold og kontrollerer manuell/automatisk aktivering, databevaring, offline etter oppdatering og ingen omlastingsløkke. Dette erstatter ikke testing på fysisk Samsung-telefon.
 
-package.json er eneste kilde til versjonsnummeret. Ved nye utgivelser skal det oppdateres før innfletting i main. Både lokalappen og GitHub Pages bygges med pnpm build, som kontrollerer at appen og version.json har samme versjon. Publisert versjon kan kontrolleres på https://levemannen.github.io/H-NDBALLTRENER-N/version.json etter publisering. Se AGENTS.md for reglene ved videre arbeid.
+## GitHub og publisering
+
+Arbeidsgren: feature/handballtrener-3-0. check.yml tester grenen og pull requests. pages.yml publiserer fra main eller manuelt startet workflow. Relative ressursstier og hash-ruting støtter /H-NDBALLTRENER-N/.
+
+Etter innfletting og vellykket Pages-workflow: kontroller [publisert version.json](https://levemannen.github.io/H-NDBALLTRENER-N/version.json) og synlig appversjon. Et lokalt bygg betyr ikke at Pages eller telefonen er oppdatert. Se AGENTS.md for versjonering og [RAPPORT-3.0.md](RAPPORT-3.0.md) for leveransestatus.
