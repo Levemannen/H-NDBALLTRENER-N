@@ -1,0 +1,47 @@
+[
+  {
+    "id": "F01",
+    "evidence": {
+      "invalidGroupRulesAccepted": true
+    }
+  },
+  {
+    "id": "F04",
+    "evidence": {
+      "samePlayersDifferentImportTime": "conflict"
+    }
+  },
+  {
+    "id": "F01-browser",
+    "evidence": {
+      "errors": [
+        "o.filter is not a function"
+      ],
+      "bodyLength": 0
+    }
+  },
+  {
+    "id": "F02",
+    "evidence": {
+      "players": 16,
+      "source": "Alle spillere",
+      "selected": 15
+    }
+  },
+  {
+    "id": "F03",
+    "evidence": {
+      "savedAttendanceBefore": 1,
+      "savedAttendanceAfterSavingOpenDraft": 0
+    }
+  },
+  {
+    "id": "F05",
+    "evidence": {
+      "projectAddressInputsAfterConnect": 0,
+      "visibleButtons": [
+        "Logg inn og synkroniser"
+      ]
+    }
+  }
+]
