@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "revision": 2,
+  "updatedAt": "2026-11-17T18:00:00Z",
+  "teams": [
+    {
+      "id": "vif-g2016-17",
+      "name": "Vålerenga G2016/17",
+      "players": [
+        { "id": "example-player-001", "name": "SYNTETISK EKSEMPEL – erstatt med navn" },
+        { "id": "example-player-002", "name": "SYNTETISK EKSEMPEL – erstatt med annet navn" }
+      ]
+    },
+    {
+      "id": "vif-j2011",
+      "name": "Vålerenga J2011",
+      "players": [
+        { "id": "example-player-003", "name": "SYNTETISK EKSEMPEL – erstatt med navn i dette laget" }
+      ]
+    }
+  ]
+}

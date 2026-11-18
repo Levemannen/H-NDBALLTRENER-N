@@ -127,6 +127,10 @@ export function DiagramEditor({initial,onSave,onClose}:{initial?:Diagram;onSave:
     </div>
     <p className="muted">{start?'Trykk der pilen skal slutte.':tool==='select'?'Dra et symbol, eller velg det og trykk på den nye plasseringen.':tool in arrowLabels?'Trykk der pilen skal starte.':'Trykk på banen for å plassere symbolet.'}</p>
     <Court diagram={d} selected={selected} onPlace={updatePoint} onSelect={tool==='select'?select:undefined} onMove={tool==='select'?moveMark:undefined}/>
+    <div className="row wrap">{tool==='select'?<p>Velg et element nedenfor og rediger koordinatene med tastaturet.</p>:<button type="button" onClick={()=>{
+      if(tool==='run'||tool==='pass'||tool==='carry'){const id=uid();set({...d,arrows:[...d.arrows,{id,kind:tool,from:{x:30,y:50},to:{x:70,y:50}}]});select(id);setStart(undefined);}
+      else updatePoint({x:50,y:50});
+    }}>{tool==='run'||tool==='pass'||tool==='carry'?'Legg til pil med start- og sluttpunkt':'Legg til valgt symbol midt på banen'}</button>}</div>
     <div className="row wrap"><button disabled={history.index===0} onClick={()=>step(-1)}>Angre</button><button disabled={history.index===history.frames.length-1} onClick={()=>step(1)}>Gjør om</button></div>
     <div className="row wrap">
       <label>Valgt element<select value={mark||arrow?selected:''} onChange={e=>select(e.target.value)}><option value="">Ingen</option>{d.marks.map((m,i)=><option key={m.id} value={m.id}>{i+1}. {symbols[m.kind]} {m.label}</option>)}{d.arrows.map((a,i)=><option key={a.id} value={a.id}>Pil {i+1} – {arrowLabels[a.kind]}</option>)}</select></label>

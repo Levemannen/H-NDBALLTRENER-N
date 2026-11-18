@@ -9,7 +9,7 @@ export type Point = {x:number;y:number};
 export type SymbolKind = 'player'|'keeper'|'cone'|'ball'|'goal'|'hurdle'|'mat'|'empty'|'text'|'hoop'|'bench'|'wall';
 export type Diagram = {court:'full'|'half'|'crop'; marks:({id:string;kind:SymbolKind;label:string;team:0|1}&Point)[]; arrows:{id:string;kind:'run'|'pass'|'carry';from:Point;to:Point;bend?:Point;via?:Point[]}[]};
 export type Item = {id:string; exerciseId:string; minutes:number; comment:string; variant?:string};
-export type Session = {completed?:boolean;planBOriginal?:Pick<Session,'items'|'players'|'attendees'|'attendanceRegistered'|'allocation'>;attendanceRegistered?:boolean;startTime?:string; allocation?:{name:string;players:string[]}[]; evaluation?:{rating:string;note:string};id:string; name:string; date:string; duration:number; players:number; coaches:number; hall:string; focus:string; attendees:string[]; items:Item[]; template:boolean};
+export type Session = {editBase?:string;completed?:boolean;planBOriginal?:Pick<Session,'items'|'players'|'attendees'|'attendanceRegistered'|'allocation'>;attendanceRegistered?:boolean;startTime?:string; allocation?:{name:string;players:string[]}[]; evaluation?:{rating:string;note:string};id:string; name:string; date:string; duration:number; players:number; coaches:number; hall:string; focus:string; attendees:string[]; items:Item[]; template:boolean};
 export type Annotation = {note:string; variant:string; difficulty:string; metadata?:ExerciseMeta};
 export type DiagramStatus='Gjennomgått mot kilden'|'Til trenergjennomgang'|'Trenger avklaring';
 export type Data = {groupRules?:GroupRule[];diagramSteps?:Record<string,Diagram[]>;diagramReview?:Record<string,DiagramStatus>;draft?:Session; version:1; team:string; players:Player[]; sessions:Session[]; favorites:string[]; notes:Record<string,Annotation>; diagrams:Record<string,Diagram>; exercises:Exercise[]};
@@ -43,6 +43,7 @@ const exercise = (v:unknown) => object(v) && metadata(v) && key(v.id) && string(
 const point = (v:unknown) => object(v) && [v.x,v.y].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=100);
 const diagram = (v:unknown) => object(v) && ['full','half','crop'].includes(String(v.court)) && list(v.marks,m=>object(m)&&key(m.id)&&point(m)&&['player','keeper','cone','ball','goal','hurdle','mat','empty','text','hoop','bench','wall'].includes(String(m.kind))&&string(m.label)&&(m.team===0||m.team===1)) && list(v.arrows,a=>object(a)&&key(a.id)&&['run','pass','carry'].includes(String(a.kind))&&point(a.from)&&point(a.to)&&(a.bend===undefined||point(a.bend))&&(a.via===undefined||list(a.via,point)));
 const sessionExtras=(v:Obj)=>{
+  if(v.editBase!==undefined){if(!string(v.editBase))return false;try{const base=JSON.parse(v.editBase);if(!object(base)||base.id!==v.id||base.editBase!==undefined||!validSession(base))return false;}catch{return false;}}
   if(v.completed!==undefined&&typeof v.completed!=='boolean')return false;
   if(v.planBOriginal!==undefined){if(!object(v.planBOriginal)||!validSession({...v,...v.planBOriginal,planBOriginal:undefined}))return false;}
   if(v.attendanceRegistered!==undefined&&typeof v.attendanceRegistered!=='boolean')return false;
@@ -148,7 +149,7 @@ export const activePlayers=(data:Data)=>data.players.filter(p=>!p.archived);
 export const playerCount=(s:Session)=>s.attendanceRegistered||s.attendees.length?s.attendees.length:s.players;
 export const hallFits=(known:string[]|undefined,hall:string)=>!known?.length||known.includes(hall)||(['gymsal','liten'].includes(hall)&&known.some(h=>['gymsal','liten'].includes(h)));
 export const fits=(e:Exercise,s:Session)=> (!e.players||(playerCount(s)>=e.players[0]&&playerCount(s)<=e.players[1]))&&hallFits(e.halls,s.hall)&&(e.coaches===undefined||e.coaches<=s.coaches);
-export const cloneSession=(s:Session,template=false):Session=>({...structuredClone(s),id:uid(),date:dateToday(),name:s.name+(template?' – mal':' – kopi'),template,attendanceRegistered:false,attendees:[],allocation:undefined,evaluation:undefined,completed:false,planBOriginal:undefined,items:s.items.map(i=>({...i,id:uid()}))});
+export const cloneSession=(s:Session,template=false):Session=>({...structuredClone(s),editBase:undefined,id:uid(),date:dateToday(),name:s.name+(template?' – mal':' – kopi'),template,attendanceRegistered:false,attendees:[],allocation:undefined,evaluation:undefined,completed:false,planBOriginal:undefined,items:s.items.map(i=>({...i,id:uid()}))});
 export function archivePlayer(data:Data,id:string,archived=true):Data {
   return {...data,players:data.players.map(p=>p.id===id?{...p,archived}:p)};
 }
