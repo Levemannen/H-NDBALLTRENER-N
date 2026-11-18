@@ -1,6 +1,7 @@
 import {testSync} from './browser-sync.mjs';
 import {auditDiagrams} from './browser-diagrams.mjs';
 import {runV3} from './browser-v3.mjs';
+import {testRosters} from './browser-rosters.mjs';
 import {createServer} from 'node:http';
 import {readFile,mkdir} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -9,17 +10,20 @@ import {pathToFileURL} from 'node:url';
 const modulePath=process.env.PLAYWRIGHT_MODULE;
 const {chromium}=await import(modulePath?pathToFileURL(modulePath).href:'playwright');
 let revision=0;
+let rosterOverride;
 const types={json:'application/json',html:'text/html',css:'text/css',js:'text/javascript',webmanifest:'application/manifest+json',svg:'image/svg+xml',png:'image/png'};
 const server=createServer(async(req,res)=>{
  const path=new URL(req.url,'http://localhost').pathname;
  try{
   let file=path.startsWith('/handball/')?path.slice(10)||'index.html':'missing';
-  const requested=/--test(\d+)\.js$/.exec(file);if(requested)file=file.replace(/--test\d+\.js$/,'.js');
+  const requested=/--test(\d+)\.(js|css)$/.exec(file);if(requested)file=file.replace(/--test\d+\.(js|css)$/,'.$1');
   let body=await readFile(join(process.cwd(),'dist',file));
-  const newName=text=>text.replace(/(assets\/index-[\w-]+)\.js/g,'$1--test'+revision+'.js');
+  if(file==='rosters.json'&&rosterOverride!==undefined)body=Buffer.from(typeof rosterOverride==='string'?rosterOverride:JSON.stringify(rosterOverride));
+  const newName=text=>text.replace(/(assets\/index-[\w-]+)\.(js|css)/g,'$1--test'+revision+'.$2');
   if(file==='sw.js'&&revision)body=Buffer.from(newName(body.toString().replace("const cacheName=prefix+","const cacheName=prefix+'update-"+revision+":'+")));
   if(file==='index.html'&&revision)body=Buffer.from(newName(body.toString()));
   if(/assets\/index-.*\.js$/.test(file))body=Buffer.from('window.__TEST_BUILD='+Number(requested?.[1]??0)+';\n'+body.toString());
+  if(/assets\/index-.*\.css$/.test(file))body=Buffer.from(body.toString()+'\n:root{--test-css-build:'+Number(requested?.[1]??0)+'}');
   res.writeHead(200,{'Content-Type':types[file.split('.').at(-1)]??'application/octet-stream'});res.end(body);
  }catch{res.writeHead(404);res.end();}
 });
@@ -29,7 +33,7 @@ const readStored=page=>page.evaluate(()=>{const w=JSON.parse(localStorage.getIte
 let browser;
 try{
  browser=await chromium.launch(process.env.EDGE_PATH?{executablePath:process.env.EDGE_PATH,headless:true}: {headless:true});
- for(const width of (process.env.V3_ONLY||process.env.AUDIT_ONLY||process.env.SYNC_ONLY?[]:[360,390,768,1280])){
+ for(const width of (process.env.ROSTER_ONLY||process.env.V3_ONLY||process.env.AUDIT_ONLY||process.env.SYNC_ONLY?[]:[360,390,768,1280])){
   console.log('Starting '+width);
   const context=await browser.newContext({viewport:{width,height:900},acceptDownloads:true});
   const page=await context.newPage();page.setDefaultTimeout(10000);page.on('dialog',d=>d.accept());const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error(e.message);});page.on('console',msg=>{if(msg.type()==='error')console.error(msg.text());});
@@ -63,7 +67,8 @@ try{
   if(process.env.SCREENSHOT_DIR){await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:join(process.env.SCREENSHOT_DIR,'handball-30-'+width+'.png'),fullPage:true});}
   assert.deepEqual(errors,[]);console.log('PASS '+width+'px: utkast, økt, lag, arkivering, kopi, backup, timer, offline, fanekonflikt, SVG');await context.close();
  }
- if(!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY)await runV3(browser,url);
- if(!process.env.V3_ONLY&&!process.env.SYNC_ONLY)await auditDiagrams(browser,url);
- if(!process.env.V3_ONLY&&!process.env.AUDIT_ONLY)await testSync(browser,url);
+ if(!process.env.ROSTER_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY)await runV3(browser,url);
+ if(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.SYNC_ONLY)await auditDiagrams(browser,url);
+ if(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY)await testSync(browser,url);
+ if(!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY)await testRosters(browser,url,value=>rosterOverride=value,()=>++revision);
 }finally{await browser?.close();server.close();}

@@ -2,6 +2,8 @@
 
 Norsk React/TypeScript/Vite-app for håndballtrening, flere lag, SVG-øvelsesbank og offlinebruk. Appversjonen kommer kun fra package.json. Konto og ekstern KI er ikke nødvendig. Valgfri privat synkronisering er beskrevet i [SYNC.md](SYNC.md).
 
+Mobilrettinger og offentlig spillerimport er beskrevet i [rapporten for 3.0.1](RAPPORT-3.0.1.md). Se [norsk veiledning for spillerimport](SPILLERIMPORT.md) før du legger inn navn i `public/rosters.json`. Filen starter tom; eksempler ligger separat i `docs/rosters.example.json`.
+
 ## Kjøring og tester
 
 Node.js 24 og pnpm 11.25.0:
@@ -18,10 +20,13 @@ Produksjonsbygging kontrollerer TypeScript og samsvar mellom package.json, appko
 ```sh
 pnpm exec playwright install chromium
 pnpm test:browser
+pnpm test:mobile
 node scripts/diagram-report.mjs
 ```
 
 Nettlesertestene starter en isolert server under /handball/ og bruker syntetiske spillere. De åpner aldri den vanlige appens brukerdata. EDGE_PATH kan peke til Edge. SCREENSHOT_DIR lagrer skjermbilder ved 360, 390, 768 og 1280 px samt oversikter over alle 122 illustrasjoner. V3_ONLY, AUDIT_ONLY og SYNC_ONLY avgrenser feilsøking; full godkjenning bruker ingen av disse.
+
+Mobiltesten kontrollerer 320, 360, 390, 412, 768 og 1280 px, mørk visning, 200 % tekst og simulert tvungen mørk visning. Den sjekker elementoverlapp og faktisk visningsbredde og lagrer bilder i `qa/3.0.1/` (git-ignorert). Nettlesertesten tester også automatisk spillerimport, offlinebruk og PWA-oppdatering med nye JS- og CSS-adresser. `ROSTER_ONLY=1` avgrenser nettlesertesten til import; `MOBILE_MODE=large` avgrenser mobiltesten ved feilsøking.
 
 ## Nytt i 3.0-utgivelsen
 

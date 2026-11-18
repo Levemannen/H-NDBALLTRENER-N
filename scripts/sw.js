@@ -11,6 +11,8 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
   const {request}=event;
   if(request.method!=='GET'||!request.url.startsWith(self.registration.scope))return;
+  // Public roster is mutable data, never a cache-first app resource. Offline data lives in the validated workspace.
+  if(new URL(request.url).pathname===new URL('rosters.json',self.registration.scope).pathname){event.respondWith(fetch(new Request(request,{cache:'no-store'})));return;}
   event.respondWith(caches.open(cacheName).then(async cache=>{
     // Keep each shell paired with its fully precached build. Check the network,
     // but do not serve a different shell before its worker has finished installation.
