@@ -1,4 +1,6 @@
 import {RosterImport} from './RosterImport';
+import {editingSession,mergeSession} from './sessionMerge';
+import {AppBoundary} from './AppBoundary';
 import {Season} from './SeasonPanel';
 import {Updates} from './Updates';
 import {SyncPanel} from './SyncPanel';
@@ -45,7 +47,7 @@ function App(){
     setFeedback(message);
     feedbackTimer.current=window.setTimeout(()=>setFeedback(''),4200);
   }
-  function edit(s:Session){if((draft.items.length||draft.name)&&!confirm('Erstatte det påbegynte utkastet? Lagre det først hvis du vil beholde det.'))return;setRecovered(false);setDraft(structuredClone(s));location.hash='/lag-trening';}
+  function edit(s:Session){if((draft.items.length||draft.name)&&!confirm('Erstatte det påbegynte utkastet? Lagre det først hvis du vil beholde det.'))return;setRecovered(false);setDraft(data.sessions.some(x=>x.id===s.id)?editingSession(s):structuredClone(s));location.hash='/lag-trening';}
   function add(e:Exercise,open=true){
     setDraft(s=>({...s,items:[...s.items,itemFor(e)]}));
     notify('Øvelse lagt til i treningen');
@@ -54,7 +56,12 @@ function App(){
   function save(){
     const s={...draft,name:draft.name.trim()||'Trening '+draft.date};
     if(!flushDraft())return;
-    if(update(d=>({...d,sessions:[...d.sessions.filter(x=>x.id!==s.id),s]}))){resetDraft();location.hash='/treninger';notify(s.template?'Mal lagret':'Trening lagret');}
+    const current=data.sessions.find(x=>x.id===s.id),result=mergeSession(s,current);
+    if(result.conflicts.length){
+      if(!confirm('Økten er endret etter at utkastet ble åpnet: '+result.conflicts.join(', ')+'. Bruke utkastets verdier for disse feltene? OK erstatter de motstridende feltene og laster ned en sikkerhetskopi. Avbryt beholder begge versjoner uten å lagre.'))return;
+      downloadJSON(store.exportValue(),'handball-for-konfliktvalg.backup.json');
+    }
+    if(update(d=>({...d,sessions:[...d.sessions.filter(x=>x.id!==s.id),result.session]}))){resetDraft();location.hash='/treninger';notify(s.template?'Mal lagret':'Trening lagret');}
   }
   const [path,id]=route.slice(1).split('/');
   const exercise=exercises.find(e=>e.id===id);
@@ -87,7 +94,7 @@ function App(){
     })}</nav>
   </div>;
 }
-createRoot(document.getElementById('root')!).render(<App/>);
+createRoot(document.getElementById('root')!).render(<AppBoundary><App/></AppBoundary>);
 if(import.meta.env.PROD&&'serviceWorker' in navigator){
   window.addEventListener('load',()=>{navigator.serviceWorker.register(import.meta.env.BASE_URL+'sw.js',{updateViaCache:'none'}).then(reg=>{
     const announce=()=>{if(reg.waiting&&navigator.serviceWorker.controller)window.dispatchEvent(new CustomEvent('handball-update',{detail:reg.waiting}));};

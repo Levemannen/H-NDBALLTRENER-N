@@ -1,5 +1,7 @@
 # Kvalitetssjekk av Håndballtrener’n 3.0.1
 
+Oppfølging: F01–F07 er rettet i lokal 3.0.2. S01 er fortsatt åpent. Se [rettingsrapporten](RAPPORT-3.0.2.md). Funnene nedenfor beskriver 3.0.1 før retting.
+
 Dato: 18. november 2026. Kontrollert lokal kode: `d596e42`, gren `codex/handballtrener-3-0-1`. Dette er en gjennomgang med feilregistrering og forslag; appkoden er ikke rettet eller versjonsnummeret endret i denne runden.
 
 ## Vurdering

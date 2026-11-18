@@ -22,7 +22,7 @@ export function parseWorkspace(text:string):Workspace{
  if(!activeTeam(w)||activeTeam(w).archived)throw new Error('Aktivt lag mangler eller er arkivert.');
  for(const t of w.teams){
   if(!t||typeof t.id!=='string'||!t.id||typeof t.name!=='string'||typeof t.archived!=='boolean'||!validSession(t.draft)||!t.settings||!['players','coaches','duration'].every(k=>Number.isSafeInteger(t.settings[k as 'players'])&&t.settings[k as 'players']>=(k==='duration'?1:0))||!['hall','age','focus'].every(k=>typeof t.settings[k as 'hall']==='string')||!Array.isArray(t.season)||!t.season.every(b=>b&&['id','from','to','focus','note'].every(k=>typeof b[k as 'id']==='string')&&(b.sessionsPerWeek===undefined||Number.isInteger(b.sessionsPerWeek)&&b.sessionsPerWeek>=1&&b.sessionsPerWeek<=7)))throw new Error('Ugyldige lagdata eller innstillinger.');
-  parseData(JSON.stringify({version:1,team:t.name,players:t.players,sessions:t.sessions,draft:t.draft,...w.shared}));
+  parseData(JSON.stringify({version:1,team:t.name,players:t.players,sessions:t.sessions,draft:t.draft,...w.shared,groupRules:t.groupRules}));
   const ids=new Set(t.players.map(p=>p.id));
   if(t.sessions.some(s=>s.attendees.some(id=>!ids.has(id)))){
    // Legacy files may contain removed players. Keep their IDs and display them as unknown; never erase history.
