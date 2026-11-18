@@ -1,4 +1,14 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+export async function testActualRoster(browser,url,setRoster){
+ const source=JSON.parse(await readFile(new URL('../public/rosters.json',import.meta.url),'utf8'));setRoster(source);
+ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+ try{const page=await context.newPage();await page.goto(url+'#/lag');await page.waitForFunction(revision=>JSON.parse(localStorage.getItem('handballtrenern.v3'))?.rosterImport?.revision===revision,source.revision);await page.evaluate(()=>navigator.serviceWorker.ready);
+  for(const remote of source.teams){const w=await page.evaluate(()=>JSON.parse(localStorage.getItem('handballtrenern.v3')));await page.getByLabel('Aktivt lag').selectOption(w.rosterImport.teams[remote.id].localId);assert.equal(await page.locator('.player-row').count(),remote.players.length);for(const player of remote.players)assert.equal(await page.getByLabel('Nivå for '+player.name,{exact:true}).inputValue(),String(player.level??4));}
+  await context.setOffline(true);await page.reload();const w=await page.evaluate(()=>JSON.parse(localStorage.getItem('handballtrenern.v3')));for(const t of source.teams)assert.equal(w.teams.find(x=>x.id===w.rosterImport.teams[t.id].localId).players.length,t.players.length);
+  console.log('PASS offentlig spillerfil: '+source.teams.reduce((n,t)=>n+t.players.length,0)+' spillere med riktige navn og nivåer i mobilvisning og offline');
+ }finally{await context.close();setRoster(undefined);}
+}
 export async function testRosters(browser,url,setRoster,nextBuild){
  const roster={schemaVersion:1,revision:1,updatedAt:'2026-11-17T00:00:00Z',teams:[{id:'synthetic-a',name:'Syntetisk testlag A',players:Array.from({length:15},(_,i)=>({id:'synthetic-'+i,name:'Syntetisk spiller '+i}))}]};
  setRoster(roster);const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});

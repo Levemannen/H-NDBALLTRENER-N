@@ -1,6 +1,108 @@
 {
   "schemaVersion": 1,
-  "revision": 1,
-  "updatedAt": "2026-11-17T00:00:00Z",
-  "teams": []
+  "revision": 2,
+  "updatedAt": "2026-11-18T00:00:00Z",
+  "teams": [
+    {
+      "id": "vif-g2016-17",
+      "name": "Vålerenga G2016/17",
+      "players": [
+        {
+          "id": "vif-g2016-17-p001",
+          "name": "Ole Lomeland",
+          "level": 1
+        },
+        {
+          "id": "vif-g2016-17-p002",
+          "name": "Frederik Eggen",
+          "level": 1
+        },
+        {
+          "id": "vif-g2016-17-p003",
+          "name": "Eivind Ru-Da Eskeland",
+          "level": 1
+        },
+        {
+          "id": "vif-g2016-17-p004",
+          "name": "Edvard Sagvolden",
+          "level": 1
+        },
+        {
+          "id": "vif-g2016-17-p005",
+          "name": "Jan-Erik Rusiecki",
+          "level": 1
+        },
+        {
+          "id": "vif-g2016-17-p006",
+          "name": "Storm Werrum",
+          "level": 2
+        },
+        {
+          "id": "vif-g2016-17-p007",
+          "name": "Nikolai Dementiev",
+          "level": 2
+        },
+        {
+          "id": "vif-g2016-17-p008",
+          "name": "Elvar Buan",
+          "level": 2
+        },
+        {
+          "id": "vif-g2016-17-p009",
+          "name": "André Ryan Hansen",
+          "level": 2
+        },
+        {
+          "id": "vif-g2016-17-p010",
+          "name": "Nikolai Løge",
+          "level": 2
+        },
+        {
+          "id": "vif-g2016-17-p011",
+          "name": "Birkir Gustavsson Dahle",
+          "level": 3
+        },
+        {
+          "id": "vif-g2016-17-p012",
+          "name": "Robert Olai Sandum Krokå",
+          "level": 3
+        },
+        {
+          "id": "vif-g2016-17-p013",
+          "name": "Dante Lorenzo Caroprese",
+          "level": 3
+        },
+        {
+          "id": "vif-g2016-17-p014",
+          "name": "Ragnvald Valsø",
+          "level": 3
+        },
+        {
+          "id": "vif-g2016-17-p015",
+          "name": "Martin Gaarder",
+          "level": 3
+        },
+        {
+          "id": "vif-g2016-17-p016",
+          "name": "Max Busic Green",
+          "level": 3
+        },
+        {
+          "id": "vif-g2016-17-p017",
+          "name": "Brynjulf Johannes Styve-Fjeldvær",
+          "level": 4
+        },
+        {
+          "id": "vif-g2016-17-p018",
+          "name": "Milan Gasparovic",
+          "level": 4
+        },
+        {
+          "id": "vif-g2016-17-p019",
+          "name": "Eivind Theisen",
+          "level": 4
+        }
+      ]
+    }
+  ]
 }

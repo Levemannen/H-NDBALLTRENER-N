@@ -4,7 +4,7 @@ Siste rettingsrunde: [3.0.2 – rettelser etter kvalitetssjekken](RAPPORT-3.0.2.
 
 Norsk React/TypeScript/Vite-app for håndballtrening, flere lag, SVG-øvelsesbank og offlinebruk. Appversjonen kommer kun fra package.json. Konto og ekstern KI er ikke nødvendig. Valgfri privat synkronisering er beskrevet i [SYNC.md](SYNC.md).
 
-Mobilrettinger og offentlig spillerimport er beskrevet i [rapporten for 3.0.1](RAPPORT-3.0.1.md). Se [norsk veiledning for spillerimport](SPILLERIMPORT.md) før du legger inn navn i `public/rosters.json`. Filen starter tom; eksempler ligger separat i `docs/rosters.example.json`.
+Mobilrettinger og offentlig spillerimport er beskrevet i [rapporten for 3.0.1](RAPPORT-3.0.1.md). Se [norsk veiledning for spillerimport](SPILLERIMPORT.md) før du legger inn navn i `public/rosters.json`. Filen inneholder godkjente navn og nivåer for Vålerenga G2016/17; eksempler ligger separat i `docs/rosters.example.json`.
 
 ## Kjøring og tester
 

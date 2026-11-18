@@ -1,7 +1,7 @@
 import {testSync} from './browser-sync.mjs';
 import {auditDiagrams} from './browser-diagrams.mjs';
 import {runV3} from './browser-v3.mjs';
-import {testRosters} from './browser-rosters.mjs';
+import {testRosters,testActualRoster} from './browser-rosters.mjs';
 import {createServer} from 'node:http';
 import {readFile,mkdir} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -18,7 +18,7 @@ const server=createServer(async(req,res)=>{
   let file=path.startsWith('/handball/')?path.slice(10)||'index.html':'missing';
   const requested=/--test(\d+)\.(js|css)$/.exec(file);if(requested)file=file.replace(/--test\d+\.(js|css)$/,'.$1');
   let body=await readFile(join(process.cwd(),'dist',file));
-  if(file==='rosters.json'&&rosterOverride!==undefined)body=Buffer.from(typeof rosterOverride==='string'?rosterOverride:JSON.stringify(rosterOverride));
+  if(file==='rosters.json')body=Buffer.from(typeof rosterOverride==='string'?rosterOverride:JSON.stringify(rosterOverride??{schemaVersion:1,revision:1,updatedAt:'2026-11-18T00:00:00Z',teams:[]}));
   const newName=text=>text.replace(/(assets\/index-[\w-]+)\.(js|css)/g,'$1--test'+revision+'.$2');
   if(file==='sw.js'&&revision)body=Buffer.from(newName(body.toString().replace("const cacheName=prefix+","const cacheName=prefix+'update-"+revision+":'+")));
   if(file==='index.html'&&revision)body=Buffer.from(newName(body.toString()));
@@ -70,5 +70,5 @@ try{
  if(!process.env.ROSTER_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY)await runV3(browser,url);
  if(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.SYNC_ONLY)await auditDiagrams(browser,url);
  if(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY)await testSync(browser,url);
- if(!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY)await testRosters(browser,url,value=>rosterOverride=value,()=>++revision);
+ if(!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY){await testRosters(browser,url,value=>rosterOverride=value,()=>++revision);await testActualRoster(browser,url,value=>rosterOverride=value);}
 }finally{await browser?.close();server.close();}

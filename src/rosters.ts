@@ -1,6 +1,7 @@
+import type {Level} from './model.ts';
 import {defaultSettings,sessionFor,type Workspace,type ClubTeam} from './workspace.ts';
-export type RosterFile={schemaVersion:1;revision:number;updatedAt:string;teams:{id:string;name:string;players:{id:string;name:string}[]}[]};
-export type RosterState={revision:number;signature:string;updatedAt:string;importedAt:string;teams:Record<string,{localId:string;name:string;players:Record<string,{localId:string;name:string}>}>};
+export type RosterFile={schemaVersion:1;revision:number;updatedAt:string;teams:{id:string;name:string;players:{id:string;name:string;level?:Level}[]}[]};
+export type RosterState={revision:number;signature:string;updatedAt:string;importedAt:string;teams:Record<string,{localId:string;name:string;players:Record<string,{localId:string;name:string;level?:Level}>}>};
 export type RosterConflict={key:string;message:string;options:{value:string;label:string}[]};
 const obj=(v:unknown):v is Record<string,unknown>=>Boolean(v)&&typeof v==='object'&&!Array.isArray(v);
 const id=(v:unknown):v is string=>typeof v==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9-]{0,99}$/.test(v)&&v!=='prototype'&&!Object.hasOwn(Object.prototype,v);
@@ -11,12 +12,12 @@ export function parseRoster(text:string):RosterFile{
  if(!obj(r)||!keys(r,['schemaVersion','revision','updatedAt','teams'])||r.schemaVersion!==1||!Number.isSafeInteger(r.revision)||Number(r.revision)<1||typeof r.updatedAt!=='string'||!Number.isFinite(Date.parse(r.updatedAt))||!Array.isArray(r.teams)||r.teams.length>100)throw new Error('Spillerfilen har ugyldig format eller versjon.');
  const teams=new Set<string>(),players=new Set<string>();
  for(const t of r.teams){if(!obj(t)||!keys(t,['id','name','players'])||!id(t.id)||!name(t.name)||teams.has(t.id)||!Array.isArray(t.players)||t.players.length>1000)throw new Error('Kontroller lag-ID, lagnavn og spillerlisten.');teams.add(t.id);
-  for(const p of t.players){if(!obj(p)||!keys(p,['id','name'])||!id(p.id)||!name(p.name)||players.has(p.id))throw new Error('Hver spiller må ha unik ID og navn. Nivåer og private felt skal ikke ligge i offentlig fil.');players.add(p.id);}
+  for(const p of t.players){if(!obj(p)||!keys(p,['id','name','level'])||!id(p.id)||!name(p.name)||players.has(p.id)||(p.level!==undefined&&![1,2,3,4].includes(Number(p.level)))|| (p.level!==undefined&&typeof p.level!=='number'))throw new Error('Hver spiller må ha unik ID, navn og eventuelt nivå 1–4. Oppmøte og kommentarer er ikke tillatt.');players.add(p.id);}
  }
  return r as RosterFile;
 }
 export function validRosterState(v:unknown):v is RosterState{
- return obj(v)&&Number.isSafeInteger(v.revision)&&Number(v.revision)>0&&typeof v.signature==='string'&&typeof v.updatedAt==='string'&&typeof v.importedAt==='string'&&obj(v.teams)&&Object.entries(v.teams).every(([key,t])=>id(key)&&obj(t)&&id(t.localId)&&typeof t.name==='string'&&obj(t.players)&&Object.entries(t.players).every(([key,p])=>id(key)&&obj(p)&&id(p.localId)&&typeof p.name==='string'));
+ return obj(v)&&Number.isSafeInteger(v.revision)&&Number(v.revision)>0&&typeof v.signature==='string'&&typeof v.updatedAt==='string'&&typeof v.importedAt==='string'&&obj(v.teams)&&Object.entries(v.teams).every(([key,t])=>id(key)&&obj(t)&&id(t.localId)&&typeof t.name==='string'&&obj(t.players)&&Object.entries(t.players).every(([key,p])=>id(key)&&obj(p)&&id(p.localId)&&typeof p.name==='string'&&(p.level===undefined||[1,2,3,4].includes(p.level as number))));
 }
 const same=(a:string,b:string)=>a.trim().toLocaleLowerCase('nb')===b.trim().toLocaleLowerCase('nb');
 const untouched=(t:ClubTeam)=>!t.players.length&&!t.sessions.length&&!t.draft.items.length&&!t.draft.name&&!t.season.length;
@@ -49,12 +50,14 @@ export function planRoster(current:Workspace,file:RosterFile,answers:Record<stri
    const moved=Object.entries(state.teams).find(([teamId,t])=>teamId!==remote.id&&t.players[p.id]);if(moved)throw new Error('Spiller-ID '+p.id+' tilhører et annet lag. Flytting mellom lag må avklares; ingen historikk er flyttet.');
    if(pl&&!local){const choice=ask('missing:'+p.id,'«'+p.name+'» er tidligere fjernet lokalt.',[{value:'keep',label:'Behold lokal sletting'},{value:'restore',label:'Legg spilleren til igjen'}]);if(choice!=='restore')continue;}
    if(!local&&!pl){
-    const matches=team.players.filter(x=>same(x.name,p.name)&&!Object.values(link!.players).some(l=>l.localId===x.id));
-    if(matches.length){const choice=ask('player:'+p.id,'«'+p.name+'» finnes allerede lokalt. Er dette samme spiller?', [...matches.map(x=>({value:x.id,label:'Koble til eksisterende '+x.name+' – behold nivå og historikk'})),{value:'new',label:'Dette er en ny spiller'}]);if(!choice)continue;if(choice!=='new')local=matches.find(x=>x.id===choice);}
+    const candidates=team.players.filter(x=>!Object.values(link!.players).some(l=>l.localId===x.id));
+    const exact=candidates.filter(x=>same(x.name,p.name));const matches=exact.length?exact:candidates;
+    if(matches.length){const choice=ask('player:'+p.id,'Finnes «'+p.name+'» allerede i dette laget, eventuelt med forkortet navn?', [...matches.map(x=>({value:x.id,label:'Koble til eksisterende '+x.name+' – behold nivå og historikk'})),{value:'new',label:'Dette er en ny spiller'}]);if(!choice)continue;if(choice!=='new')local=matches.find(x=>x.id===choice);}
    }
-   if(!local){const localId=pl?.localId??'github-'+p.id;if(team.players.some(x=>x.id===localId))throw new Error('Spiller-ID er allerede i bruk lokalt.');local={id:localId,name:p.name,level:4};team.players.push(local);}
-   if(pl)rename('player-name:'+p.id,local,pl.name,p.name);
-   link!.players[p.id]={localId:local.id,name:p.name};
+   if(!local){const localId=pl?.localId??'github-'+p.id;if(team.players.some(x=>x.id===localId))throw new Error('Spiller-ID er allerede i bruk lokalt.');local={id:localId,name:p.name,level:p.level??4};team.players.push(local);}
+   rename('player-name:'+p.id,local,pl?.name??local.name,p.name);
+   if(p.level!==undefined&&p.level!==pl?.level&&local.level!==p.level){const choice=ask('player-level:'+p.id,'Nivå for «'+p.name+'»: lokalt '+local.level+', GitHub '+p.level+'.',[{value:'local',label:'Behold lokalt nivå '+local.level},{value:'remote',label:'Bruk nivå '+p.level+' fra GitHub'}]);if(choice==='remote')local.level=p.level;}
+   link!.players[p.id]={localId:local.id,name:p.name,...(p.level!==undefined?{level:p.level}:{})};
   }
  }
  if(!Object.keys(old?.teams??{}).length&&untouched(current.teams.find(t=>t.id===current.activeTeamId)!)){const first=Object.values(state.teams).map(link=>w.teams.find(t=>t.id===link.localId)).find(t=>t&&!t.archived&&t.players.length);if(first)w.activeTeamId=first.id;}

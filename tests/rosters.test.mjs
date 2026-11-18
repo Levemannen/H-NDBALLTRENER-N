@@ -1,5 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+
+test('publisert spillerliste importeres med navn og nivå uten dubletter',()=>{
+ const file=parseRoster(readFileSync(new URL('../public/rosters.json',import.meta.url),'utf8'));
+ const result=planRoster(migrateV1(fresh()),file);assert.equal(result.conflicts.length,0);
+ for(const remote of file.teams){const team=result.workspace.teams.find(t=>t.id===result.workspace.rosterImport.teams[remote.id].localId);assert.equal(team.players.length,remote.players.length);for(const player of remote.players){const local=team.players.find(p=>p.id===result.workspace.rosterImport.teams[remote.id].players[player.id].localId);assert.equal(local.name,player.name);assert.equal(local.level,player.level??4);}}
+ assert.equal(planRoster(parseWorkspace(JSON.stringify(result.workspace)),file).changed,false);
+});
+
+test('publisert nivå krever valg for eksisterende spiller og bevarer senere lokal vurdering',()=>{
+ const source=file(1);source.teams[0].players[0].level=2;let w=planRoster(migrateV1(fresh()),source).workspace;const t=w.teams.find(t=>t.id===w.activeTeamId);t.players[0].level=1;
+ const next=structuredClone(source);next.revision=2;next.teams[0].players[0].level=3;
+ assert.equal(planRoster(w,next).conflicts[0].key,'player-level:a-0');const keep=planRoster(w,next,{'player-level:a-0':'local'}).workspace;assert.equal(keep.teams.find(t=>t.id===keep.activeTeamId).players[0].level,1);
+ const accept=planRoster(w,next,{'player-level:a-0':'remote'}).workspace;assert.equal(accept.teams.find(t=>t.id===accept.activeTeamId).players[0].level,3);
+ assert.equal(planRoster(keep,{...next,revision:3}).conflicts.length,0);assert.equal(planRoster(keep,{...next,revision:3}).workspace.teams.find(t=>t.id===keep.activeTeamId).players[0].level,1);
+ for(const level of [0,5,'2',null]){const invalid=structuredClone(source);invalid.teams[0].players[0].level=level;assert.throws(()=>parseRoster(JSON.stringify(invalid)));}
+});
+
+test('forkortet lokalt navn kobles til fullt navn uten å miste historikk',()=>{
+ const d=fresh();d.team='Syntetisk lag A';d.players=[{id:'local-short',name:'Kort',level:1}];d.sessions=[{...newSession(),attendees:['local-short'],attendanceRegistered:true}];const w=migrateV1(d),source=file(1);source.teams[0].players[0].level=1;
+ const result=planRoster(w,source,{'team:team-a':w.activeTeamId,'player:a-0':'local-short'});assert.equal(result.conflicts.length,0);assert.equal(result.workspace.teams[0].players.length,1);assert.equal(result.workspace.teams[0].players[0].name,source.teams[0].players[0].name);assert.equal(result.workspace.teams[0].players[0].id,'local-short');assert.deepEqual(result.workspace.teams[0].sessions,d.sessions);
+});
 import {fresh,newSession} from '../src/model.ts';
 import {migrateV1,parseWorkspace} from '../src/workspace.ts';
 import {parseRoster,planRoster} from '../src/rosters.ts';
@@ -29,7 +51,7 @@ test('eldre 3.0-spillere kobles bare etter avklaring; eksisterende nivå og ID b
  const answers={'team:team-a':w.activeTeamId,'player:a-0':'local-player'};const linked=planRoster(w,file(1),answers);assert.equal(linked.conflicts.length,0);assert.equal(linked.workspace.teams.length,1);assert.deepEqual(linked.workspace.teams[0].players,d.players);
 });
 test('ugyldig JSON, privat innhold, dupliserte ID-er og gamle revisjoner avvises',()=>{
- for(const text of ['broken','{}',JSON.stringify({...file(),teams:[{id:'bad',name:'Bad',players:[{id:'p',name:'Test',level:1}]}]})])assert.throws(()=>parseRoster(text));
+ for(const text of ['broken','{}',JSON.stringify({...file(),teams:[{id:'bad',name:'Bad',players:[{id:'p',name:'Test',attendance:[]}]}]})])assert.throws(()=>parseRoster(text));
  const duplicate=file(2);duplicate.teams[0].players[1].id='a-0';assert.throws(()=>parseRoster(JSON.stringify(duplicate)));
  const w=planRoster(migrateV1(fresh()),file(1,3)).workspace;assert.throws(()=>planRoster(w,file(1,2)),/eldre/);assert.throws(()=>planRoster(w,file(2,3)),/revision/);
  const malformed=structuredClone(w);malformed.rosterImport.teams['team-a'].localId={};assert.throws(()=>parseWorkspace(JSON.stringify(malformed)));

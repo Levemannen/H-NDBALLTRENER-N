@@ -5,7 +5,7 @@ import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 const dir=join(process.cwd(),'qa','3.0.1');await mkdir(dir,{recursive:true});
 const baseline=Boolean(process.env.CAPTURE_BASELINE),prefix=baseline?'before':'after';
-const server=createServer(async(req,res)=>{try{const file=new URL(req.url,'http://localhost').pathname.replace(/^\/handball\//,'')||'index.html';const data=await readFile(join(process.env.DIST_DIR||'dist',file));res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',css:'text/css',json:'application/json',svg:'image/svg+xml',png:'image/png',webmanifest:'application/manifest+json'})[file.split('.').at(-1)]??'application/octet-stream'});res.end(data);}catch{res.writeHead(404);res.end();}});
+const server=createServer(async(req,res)=>{try{const file=new URL(req.url,'http://localhost').pathname.replace(/^\/handball\//,'')||'index.html';const data=file==='rosters.json'?JSON.stringify({schemaVersion:1,revision:1,updatedAt:'2026-11-18T00:00:00Z',teams:[]}):await readFile(join(process.env.DIST_DIR||'dist',file));res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',css:'text/css',json:'application/json',svg:'image/svg+xml',png:'image/png',webmanifest:'application/manifest+json'})[file.split('.').at(-1)]??'application/octet-stream'});res.end(data);}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port+'/handball/';
 
 const {fresh,newSession}=await import('../src/model.ts');const {migrateV1}=await import('../src/workspace.ts');
