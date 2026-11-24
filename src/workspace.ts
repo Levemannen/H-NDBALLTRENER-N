@@ -1,10 +1,11 @@
+import {validRosterState,type RosterState} from './rosters.ts';
 import {type Data,type Session,fresh,newSession,parseData,validSession,uid,storageKey} from './model.ts';
 import {parseDraft,draftKey} from './storage.ts';
 export const workspaceKey='handballtrenern.v3';
 export type Settings={players:number;coaches:number;duration:number;hall:string;age:string;focus:string};
 export type SeasonBlock={sessionsPerWeek?:number;id:string;from:string;to:string;focus:string;note:string};
 export type ClubTeam={groupRules?:Data['groupRules'];id:string;name:string;archived:boolean;players:Data['players'];sessions:Session[];draft:Session;settings:Settings;season:SeasonBlock[]};
-export type Workspace={version:3;activeTeamId:string;teams:ClubTeam[];shared:Pick<Data,'favorites'|'notes'|'diagrams'|'exercises'|'diagramSteps'|'diagramReview'>;quickCollection:string[];personalize:boolean};
+export type Workspace={rosterImport?:RosterState;version:3;activeTeamId:string;teams:ClubTeam[];shared:Pick<Data,'favorites'|'notes'|'diagrams'|'exercises'|'diagramSteps'|'diagramReview'>;quickCollection:string[];personalize:boolean};
 export const defaultQuick=[101,2,112,100,109,94,91,111,113].map(n=>'master-'+n);
 export const defaultSettings=():Settings=>({players:15,coaches:1,duration:60,hall:'stor',age:'',focus:''});
 export const sessionFor=(settings:Settings):Session=>({...newSession(),players:settings.players,coaches:settings.coaches,duration:settings.duration,hall:settings.hall,focus:settings.focus});
@@ -17,10 +18,11 @@ export function migrateV1(data:Data,draft?:Session):Workspace{
 export function parseWorkspace(text:string):Workspace{
  const w=JSON.parse(text) as Workspace;
  if(!w||w.version!==3||!Array.isArray(w.teams)||!w.teams.length||new Set(w.teams.map(t=>t.id)).size!==w.teams.length||!Array.isArray(w.quickCollection)||!w.quickCollection.every(id=>typeof id==='string')||new Set(w.quickCollection).size!==w.quickCollection.length||typeof w.personalize!=='boolean')throw new Error('Ugyldig 3.0-sikkerhetskopi.');
+ if(w.rosterImport!==undefined&&!validRosterState(w.rosterImport))throw new Error('Ugyldig importhistorikk for spillerfilen.');
  if(!activeTeam(w)||activeTeam(w).archived)throw new Error('Aktivt lag mangler eller er arkivert.');
  for(const t of w.teams){
   if(!t||typeof t.id!=='string'||!t.id||typeof t.name!=='string'||typeof t.archived!=='boolean'||!validSession(t.draft)||!t.settings||!['players','coaches','duration'].every(k=>Number.isSafeInteger(t.settings[k as 'players'])&&t.settings[k as 'players']>=(k==='duration'?1:0))||!['hall','age','focus'].every(k=>typeof t.settings[k as 'hall']==='string')||!Array.isArray(t.season)||!t.season.every(b=>b&&['id','from','to','focus','note'].every(k=>typeof b[k as 'id']==='string')&&(b.sessionsPerWeek===undefined||Number.isInteger(b.sessionsPerWeek)&&b.sessionsPerWeek>=1&&b.sessionsPerWeek<=7)))throw new Error('Ugyldige lagdata eller innstillinger.');
-  parseData(JSON.stringify({version:1,team:t.name,players:t.players,sessions:t.sessions,draft:t.draft,...w.shared}));
+  parseData(JSON.stringify({version:1,team:t.name,players:t.players,sessions:t.sessions,draft:t.draft,...w.shared,groupRules:t.groupRules}));
   const ids=new Set(t.players.map(p=>p.id));
   if(t.sessions.some(s=>s.attendees.some(id=>!ids.has(id)))){
    // Legacy files may contain removed players. Keep their IDs and display them as unknown; never erase history.

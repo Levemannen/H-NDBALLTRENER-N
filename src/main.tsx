@@ -1,3 +1,6 @@
+import {RosterImport} from './RosterImport';
+import {editingSession,mergeSession} from './sessionMerge';
+import {AppBoundary} from './AppBoundary';
 import {Season} from './SeasonPanel';
 import {Updates} from './Updates';
 import {SyncPanel} from './SyncPanel';
@@ -44,7 +47,7 @@ function App(){
     setFeedback(message);
     feedbackTimer.current=window.setTimeout(()=>setFeedback(''),4200);
   }
-  function edit(s:Session){if((draft.items.length||draft.name)&&!confirm('Erstatte det påbegynte utkastet? Lagre det først hvis du vil beholde det.'))return;setRecovered(false);setDraft(structuredClone(s));location.hash='/lag-trening';}
+  function edit(s:Session){if((draft.items.length||draft.name)&&!confirm('Erstatte det påbegynte utkastet? Lagre det først hvis du vil beholde det.'))return;setRecovered(false);setDraft(data.sessions.some(x=>x.id===s.id)?editingSession(s):structuredClone(s));location.hash='/lag-trening';}
   function add(e:Exercise,open=true){
     setDraft(s=>({...s,items:[...s.items,itemFor(e)]}));
     notify('Øvelse lagt til i treningen');
@@ -53,17 +56,22 @@ function App(){
   function save(){
     const s={...draft,name:draft.name.trim()||'Trening '+draft.date};
     if(!flushDraft())return;
-    if(update(d=>({...d,sessions:[...d.sessions.filter(x=>x.id!==s.id),s]}))){resetDraft();location.hash='/treninger';notify(s.template?'Mal lagret':'Trening lagret');}
+    const current=data.sessions.find(x=>x.id===s.id),result=mergeSession(s,current);
+    if(result.conflicts.length){
+      if(!confirm('Økten er endret etter at utkastet ble åpnet: '+result.conflicts.join(', ')+'. Bruke utkastets verdier for disse feltene? OK erstatter de motstridende feltene og laster ned en sikkerhetskopi. Avbryt beholder begge versjoner uten å lagre.'))return;
+      downloadJSON(store.exportValue(),'handball-for-konfliktvalg.backup.json');
+    }
+    if(update(d=>({...d,sessions:[...d.sessions.filter(x=>x.id!==s.id),result.session]}))){resetDraft();location.hash='/treninger';notify(s.template?'Mal lagret':'Trening lagret');}
   }
   const [path,id]=route.slice(1).split('/');
   const exercise=exercises.find(e=>e.id===id);
   const session=data.sessions.find(s=>s.id===id);
   const detail=path==='ovelse'&&Boolean(exercise);
   return <div className={detail?'app exercise-page':'app'}>
-    {!detail&&<header className={route==='/'?'brand hero':'brand'}><a href="#/" aria-label="Vålerenga Håndball – hjem"><img className="club-logo" src={import.meta.env.BASE_URL+'valerenga-handball.png'} alt="Vålerenga Håndball" /><span>VÅLERENGA<br/>HÅNDBALL</span></a>{route==='/'&&<svg className="ribbon" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true"><path fill="#e52331" d="M0 100Q45 54 193 73Q390 97 600 0V100Z"/><path fill="white" d="M0 100Q45 54 193 73Q396 97 600 19V100Z"/><path fill="#0c54a0" d="M0 100Q45 54 193 73Q404 99 600 32V100Z"/><path fill="#f5f8fb" d="M0 100Q45 54 193 73Q453 107 600 80V100Z"/></svg>}</header>}
+    {!detail&&<header className={route==='/'?'brand hero':'brand'}><a href="#/" aria-label="Vålerenga Håndball – hjem"><img className="club-logo" src={import.meta.env.BASE_URL+'valerenga-handball.png'} alt="Vålerenga Håndball" /><span className="brand-text"><strong>Vålerenga</strong><span>HÅNDBALL</span></span></a></header>}
     {storageError&&<div className="notice" role="alert">{storageError}<button onClick={rescue}>Eksporter redningskopi</button><button onClick={()=>location.reload()}>Last inn siste lagrede data</button></div>}
     <div className="team-switch"><label>Aktivt lag<select aria-label="Aktivt lag" value={store.workspace.activeTeamId} onChange={e=>{if(store.change(w=>selectTeam(w,e.target.value))){setRecovered(false);location.hash='/lag';}}}>{store.workspace.teams.filter(t=>!t.archived).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><a href="#/lag">Mitt lag · {data.players.filter(p=>!p.archived).length} spillere</a></div>
-    <SyncPanel workspace={store.workspace} getLocal={store.exportValue} replace={store.replace} flush={flushDraft}/><Updates route={route} flush={flushDraft} error={storageError}/><main id="innhold">
+    <SyncPanel workspace={store.workspace} getLocal={store.exportValue} replace={store.replace} flush={flushDraft}/><Updates route={route} flush={flushDraft} error={storageError}/><main id="innhold"><RosterImport workspace={store.workspace} change={store.change} visible={path==='lag'}/>
       {store.migrated&&<details className="notice"><summary>Data fra 2.1 er bevart</summary><p>Spillerstall og historikk er knyttet til {data.team}. Den opprinnelige 2.1-lagringen beholdes som reserve på enheten.</p><button onClick={exportRaw}>Eksporter sikkerhetskopi</button></details>}
       {recovered&&<section className="notice"><p>Du har et uferdig treningsutkast.</p><button onClick={()=>{setRecovered(false);location.hash='/lag-trening';}}>Fortsett forrige trening</button><button onClick={()=>{if(confirm('Forkaste forrige utkast og starte en ny trening?'))resetDraft();}}>Start ny trening</button></section>}
       {path==='lag-trening'&&<div className="draft-status"><p role="status">{draftStatus}</p><details><summary>Utkast og sikkerhetskopi</summary><div className="row wrap"><button onClick={exportRaw}>Eksporter utkast og data</button><button onClick={()=>{if(confirm('Forkaste utkastet? Lagrede treninger beholdes.'))resetDraft();}}>Forkast utkast</button></div></details></div>}
@@ -86,7 +94,7 @@ function App(){
     })}</nav>
   </div>;
 }
-createRoot(document.getElementById('root')!).render(<App/>);
+createRoot(document.getElementById('root')!).render(<AppBoundary><App/></AppBoundary>);
 if(import.meta.env.PROD&&'serviceWorker' in navigator){
   window.addEventListener('load',()=>{navigator.serviceWorker.register(import.meta.env.BASE_URL+'sw.js',{updateViaCache:'none'}).then(reg=>{
     const announce=()=>{if(reg.waiting&&navigator.serviceWorker.controller)window.dispatchEvent(new CustomEvent('handball-update',{detail:reg.waiting}));};

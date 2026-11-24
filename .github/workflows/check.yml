@@ -2,7 +2,7 @@ name: Kontroller endringer
 on:
   pull_request:
   push:
-    branches: [feature/handballtrener-2-1, feature/handballtrener-3-0]
+    branches: [feature/handballtrener-2-1, feature/handballtrener-3-0, 'codex/**']
 permissions:
   contents: read
 jobs:
@@ -20,3 +20,4 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:browser
+      - run: pnpm test:mobile
