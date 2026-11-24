@@ -21,7 +21,13 @@ async function inspect(page,label){
   }
   for(const card of document.querySelectorAll('.picker-card')){const box=card.getBoundingClientRect();for(const e of card.querySelectorAll('h3,p,.picker-actions')){const r=e.getBoundingClientRect();if(r.left<box.left-1||r.right>box.right+1||r.bottom>box.bottom+1)failures.push('tekst utenfor velgerkort');}const title=card.querySelector('h3').getBoundingClientRect();if(title.width<box.width*.7)failures.push('sammenpresset tittel');}
   return [...new Set(failures)];
- },page.viewportSize().width);if(!baseline)assert.deepEqual(defects,[],label);results.push({label,defects});
+ },page.viewportSize().width);results.push({label,defects});
+ if(!baseline&&defects.length){
+  const geometry=await page.evaluate(()=>({viewport:innerWidth,clientWidth:document.documentElement.clientWidth,document:document.documentElement.scrollWidth,scrollX,font:getComputedStyle(document.documentElement).fontFamily,elements:[...document.querySelectorAll('body *')].flatMap(e=>{const r=e.getBoundingClientRect();return r.width&&(r.left+scrollX< -1||r.right+scrollX>document.documentElement.clientWidth+1)?[{tag:e.tagName,className:e.getAttribute('class'),left:r.left+scrollX,right:r.right+scrollX,width:r.width}]:[]})}));
+  console.error('Mobilfeil',label,JSON.stringify(geometry));
+  await page.screenshot({path:join(dir,prefix+'-failure-'+label+'.png'),fullPage:true});
+ }
+ if(!baseline)assert.deepEqual(defects,[],label);
 }
 try{
  for(const mode of (baseline?['light']:process.env.MOBILE_MODE?[process.env.MOBILE_MODE]:['light','dark','large','forced-dark'])){
@@ -34,7 +40,10 @@ try{
    const headings={'ovelsesbank':'Øvelsesbank','detalj':'Håndballhinderløype – ball hele veien','diagrameditor':'Rediger illustrasjon','lag-okt':'Lag trening','teksteksport':'Del treningstekst','mine-treninger':'Mine treninger','mitt-lag':'Mitt lag','spillere':'Spillere','oppmote':'Lagdeling'};
    const shot=async name=>{await page.locator('.toast').waitFor({state:'hidden'});if(headings[name])await page.getByRole('heading',{name:headings[name],exact:true}).evaluate(e=>e.scrollIntoView({block:'start'}));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await inspect(page,mode+'-'+width+'-'+name);await page.screenshot({path:join(dir,prefix+'-'+mode+'-'+width+'-'+name+'.png')});};
    await shot('hjem');await page.goto(url+'#/ovelser');await page.getByLabel('Søk i øvelsesbanken').fill('ball');await shot('ovelsesbank');
-   await page.goto(url+'#/ovelse/master-121');await shot('detalj');await page.getByRole('button',{name:'Rediger illustrasjon',exact:true}).click();await page.getByRole('heading',{name:'Rediger illustrasjon',exact:true}).scrollIntoViewIfNeeded();await shot('diagrameditor');
+   await page.goto(url+'#/ovelse/master-121');await shot('detalj');
+   // Wider text must wrap even when system fonts differ between Windows and Linux.
+   if(mode==='large'&&width===320){const spacing=await page.addStyleTag({content:'.chip{letter-spacing:.12em}'});await shot('detalj-bred-tekst');await spacing.evaluate(e=>e.remove());}
+   await page.getByRole('button',{name:'Rediger illustrasjon',exact:true}).click();await page.getByRole('heading',{name:'Rediger illustrasjon',exact:true}).scrollIntoViewIfNeeded();await shot('diagrameditor');
    await page.goto(url+'#/lag-trening');await shot('lag-okt');await page.getByRole('button',{name:'Legg til øvelse',exact:true}).click();await page.locator('.plan-picker').scrollIntoViewIfNeeded();await page.getByLabel('Søk etter øvelser').fill('håndballhinder');await shot('velger-langtekst');await page.locator('.plan-picker').screenshot({path:join(dir,prefix+'-picker-'+mode+'-'+width+'.png')});
    await page.getByLabel('Søk etter øvelser').fill('');await inspect(page,mode+'-'+width+'-velger-alle-kort');await page.locator('.picker').evaluate(e=>e.scrollTop=e.scrollHeight);await page.locator('.picker button').last().click();await page.getByRole('button',{name:'Lukk',exact:true}).click();assert.equal(await page.locator('.plan-picker').count(),0);
    await page.getByRole('button',{name:'Del / eksporter økt',exact:true}).click();await page.getByRole('heading',{name:'Del treningstekst'}).scrollIntoViewIfNeeded();await shot('teksteksport');
