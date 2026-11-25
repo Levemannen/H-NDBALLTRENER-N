@@ -1,3 +1,4 @@
+import {workflow320} from './browser-workflow320.mjs';
 import {testSync} from './browser-sync.mjs';
 import {auditDiagrams} from './browser-diagrams.mjs';
 import {runV3} from './browser-v3.mjs';
@@ -33,7 +34,7 @@ const readStored=page=>page.evaluate(()=>{const w=JSON.parse(localStorage.getIte
 let browser;
 try{
  browser=await chromium.launch(process.env.EDGE_PATH?{executablePath:process.env.EDGE_PATH,headless:true}: {headless:true});
- for(const width of (process.env.ROSTER_ONLY||process.env.V3_ONLY||process.env.AUDIT_ONLY||process.env.SYNC_ONLY?[]:[360,390,768,1280])){
+ for(const width of (process.env.WORKFLOW_ONLY||process.env.ROSTER_ONLY||process.env.V3_ONLY||process.env.AUDIT_ONLY||process.env.SYNC_ONLY?[]:[360,390,768,1280])){
   console.log('Starting '+width);
   const context=await browser.newContext({viewport:{width,height:900},acceptDownloads:true});
   const page=await context.newPage();page.setDefaultTimeout(10000);page.on('dialog',d=>d.accept());const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error(e.message);});page.on('console',msg=>{if(msg.type()==='error')console.error(msg.text());});
@@ -63,12 +64,14 @@ try{
   const other=await context.newPage();await other.goto(url+'#/lag');await other.getByText(/Appen er åpen for redigering/).waitFor();await other.getByRole('textbox',{name:'Spillernavn',exact:true}).first().fill('Skal ikke lagres');await other.getByRole('button',{name:'Legg til spiller'}).click();assert.equal((await readStored(other)).players.length,6);await other.close();
   await page.goto(url+'#/ovelse/master-26');await page.getByRole('button',{name:'Rediger illustrasjon',exact:true}).click();await page.getByLabel('Valgt element').selectOption({index:1});await page.getByRole('button',{name:'Dupliser element'}).click();await page.getByRole('button',{name:'Lagre illustrasjon'}).click();assert.ok((await readStored(page)).diagrams['master-26']);await noOverflow();
   await page.goto(url+'#/lag-trening');await page.getByLabel('Navn',{exact:true}).fill('Behold gjennom oppdatering');await page.waitForFunction(()=>JSON.parse(localStorage.getItem('handballtrenern.v3'))?.teams[0].draft.name==='Behold gjennom oppdatering');revision++;await page.evaluate(async()=>{const reg=await navigator.serviceWorker.getRegistration();await reg.update();});await page.getByRole('button',{name:'Oppdater nå',exact:true}).click();await page.getByRole('button',{name:'Fortsett forrige trening'}).click();assert.equal(await page.getByLabel('Navn',{exact:true}).inputValue(),'Behold gjennom oppdatering');assert.equal(await page.evaluate(()=>window.__TEST_BUILD),revision);assert.equal((await readStored(page)).players.length,6);await context.setOffline(true);await page.reload();assert.equal(await page.evaluate(()=>window.__TEST_BUILD),revision);await context.setOffline(false);
+  const activeRun=(await readStored(page)).sessions.find(s=>s.runner&&!s.runner.endedAt);if(activeRun){await page.goto(url+'#/trening/'+activeRun.id);await page.getByRole('button',{name:'Avslutt trening',exact:true}).click();}
   await page.goto(url+'#/');revision++;await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update();});await page.waitForFunction(n=>window.__TEST_BUILD===n,revision);let reloads=0;page.on('framenavigated',()=>reloads++);await page.waitForTimeout(2200);assert.equal(reloads,0,'No reload loop');
   if(process.env.SCREENSHOT_DIR){await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:join(process.env.SCREENSHOT_DIR,'handball-30-'+width+'.png'),fullPage:true});}
   assert.deepEqual(errors,[]);console.log('PASS '+width+'px: utkast, økt, lag, arkivering, kopi, backup, timer, offline, fanekonflikt, SVG');await context.close();
  }
- if(!process.env.ROSTER_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY)await runV3(browser,url);
- if(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.SYNC_ONLY)await auditDiagrams(browser,url);
- if(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY)await testSync(browser,url);
- if(!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY){await testRosters(browser,url,value=>rosterOverride=value,()=>++revision);await testActualRoster(browser,url,value=>rosterOverride=value);}
+ if(!process.env.WORKFLOW_ONLY&&!process.env.ROSTER_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY)await runV3(browser,url);
+ if(!process.env.WORKFLOW_ONLY&&!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.SYNC_ONLY)await auditDiagrams(browser,url);
+ if(!process.env.WORKFLOW_ONLY&&!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY)await testSync(browser,url);
+ if(!process.env.WORKFLOW_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY){await testRosters(browser,url,value=>rosterOverride=value,()=>++revision);await testActualRoster(browser,url,value=>rosterOverride=value);}
+ if(process.env.WORKFLOW_ONLY||(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY))await workflow320(browser,url,()=>++revision);
 }finally{await browser?.close();server.close();}

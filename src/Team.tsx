@@ -33,7 +33,7 @@ export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data
   async function importData(f:File){
     try {
       const backup=parseBackup(await f.text());const imported=project(backup);
-      if(confirm('Sikkerhetskopien har '+imported.players.length+' spillere og '+imported.sessions.length+' treningsplaner. Erstatte alle lokale brukerdata?')){
+      if(confirm('Sikkerhetskopien har '+backup.teams.length+' lag, '+backup.teams.reduce((n,t)=>n+t.players.length,0)+' spillere og '+backup.teams.reduce((n,t)=>n+t.sessions.length,0)+' treningsplaner. Erstatte alle lokale brukerdata?')){
         if(!replace(backup)){setMessage('Importen kunne ikke lagres.');return;}
         setSource('all');setSelection(activePlayers(imported).map(p=>p.id));setTeams([]);
         setMessage('Sikkerhetskopien er importert.');notify('Sikkerhetskopien er importert.');
@@ -41,9 +41,9 @@ export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data
     }catch{setMessage('Filen er ikke en gyldig sikkerhetskopi for denne versjonen.');}
   }
   return <div className="page stack">
-    <div className="heading"><h1>Mitt lag</h1></div>
+    <div className="heading"><h1>Mitt lag</h1></div><nav className="row wrap" aria-label="Snarveier i laget">{[['players','Spillere'],['allocation','Oppmøte og lagdeling'],['backup','Sikkerhetskopi']].map(([id,label])=><button type="button" key={id} onClick={()=>document.getElementById('team-'+id)?.scrollIntoView({block:'start'})}>{label}</button>)}</nav><p>{activePlayers(data).length} aktive spillere · {[1,2,3,4].map(n=>'Nivå '+n+': '+activePlayers(data).filter(p=>p.level===n).length).join(' · ')}</p>
     <label>Lagnavn<input value={data.team} onChange={e=>update(d=>({...d,team:e.target.value}))}/></label>
-    <section className="panel stack">
+    <section className="panel stack" id="team-players">
       <h2>{archived?'Arkiverte spillere':'Spillere'}</h2><label className="check"><input type="checkbox" checked={archived} onChange={e=>setArchived(e.target.checked)}/> Vis arkiverte spillere</label>
       <form className="fields" onSubmit={e=>{e.preventDefault();if(!name.trim())return;const id=uid();if(!update(d=>({...d,players:[...d.players,{id,name:name.trim(),level}]})))return;if(source==='all')setSelection([...selection,id]);setName('');notify('Spiller lagt til');}}>
         <label>Spillernavn<input value={name} required onChange={e=>setName(e.target.value)}/></label><label>Nivå<select value={level} onChange={e=>setLevel(Number(e.target.value) as Level)}>{levels.map((s,i)=><option key={s} value={i+1}>{i+1} · {s}</option>)}</select></label><button className="primary"><UserPlus size={18}/> Legg til spiller</button>
@@ -58,7 +58,7 @@ export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data
         {p.archived&&<button aria-label={'Slett permanent '+p.name} onClick={()=>{if(confirm('Slette '+p.name+' permanent? Navn, nivå, oppmøte og lagreferanser fjernes fra alle lagrede treninger. Eksporter en sikkerhetskopi først dersom du vil beholde historikken.')&&update(d=>deletePlayer(d,p.id))){setDraft(removeFromSession(draft,p.id));setSelection(selection.filter(id=>id!==p.id));setTeams([]);}}}>Slett permanent</button>}
       </div>)}
     </section>
-    <section className="panel stack">
+    <section className="panel stack" id="team-allocation">
       <h2 className="row"><Users size={22}/> Lagdeling</h2><GroupRulesEditor players={data.players} rules={data.groupRules??[]} change={groupRules=>update(d=>({...d,groupRules}))}/>{message&&<p role="status">{message}</p>}{ruleViolations(teams,data.groupRules??[]).length>0&&<p role="alert">Den manuelle fordelingen bryter en eller flere regler. Endre fordelingen eller reglene før lagring.</p>}
       <div className="fields"><label>Oppmøteliste<select value={source} onChange={e=>{const id=e.target.value;setSource(id);setUseAll(id==='all');setSelection(id==='all'?activePlayers(data).map(p=>p.id):id==='draft'?draft.attendees:data.sessions.find(s=>s.id===id)?.attendees??[]);const saved=id==='draft'?draft:data.sessions.find(s=>s.id===id);setTeams(saved?.allocation?.map(g=>g.players)??[]);setNames(saved?.allocation?.map(g=>g.name)??[]);}}><option value="all">Alle spillere</option><option value="draft">Trening under planlegging</option>{data.sessions.filter(s=>!s.template).map(s=><option key={s.id} value={s.id}>{s.date} · {s.name}</option>)}</select></label>
       <label>Ønsket gruppestørrelse (0 = bruk antall lag)<input type="number" min="0" value={groupSize} onChange={e=>setGroupSize(Math.max(0,Math.floor(Number(e.target.value))))}/></label><label>Antall lag<input type="number" min="1" value={count} onChange={e=>setCount(Math.max(1,Math.floor(Number(e.target.value))))}/></label></div>
@@ -78,7 +78,7 @@ export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data
     }}>Lagre til valgt trening</button>
     {source==='all'&&<p className="muted">Velg en trening under Oppmøteliste for å lagre fordelingen.</p>}
     </section>
-    <section className="panel stack"><h2>Sikkerhetskopi</h2><p className="muted">Overfør lokale brukerdata mellom enhetene dine med en JSON-fil.</p>
+    <section className="panel stack" id="team-backup"><h2>Sikkerhetskopi</h2><p className="muted">Overfør lokale brukerdata mellom enhetene dine med en JSON-fil.</p>
       <input className="visually-hidden" type="file" tabIndex={-1} ref={file} accept=".json,application/json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void importData(f);}}/>
       <div className="row wrap"><button onClick={exportAll}><Download size={18}/> Eksporter</button><button onClick={()=>file.current?.click()}><Upload size={18}/> Importer</button></div>
       {message&&<p role="status">{message}</p>}

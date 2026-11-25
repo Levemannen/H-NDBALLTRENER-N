@@ -3,7 +3,7 @@ import {stableText} from './syncDecision.ts';
 export function cleanSession(s:Session):Session{const {editBase:_,...rest}=s;return rest;}
 export function editingSession(s:Session):Session{return {...structuredClone(cleanSession(s)),editBase:stableText(cleanSession(s))};}
 // Attendance and its allocation are one unit: merging these fields separately can create invalid references.
-const attendance=['players','attendees','attendanceRegistered','allocation','planBOriginal'] as const;
+const attendance=['players','attendees','attendanceRegistered','allocation','allocations','attendanceEvents','planBOriginal'] as const;
 const labels:Record<string,string>={name:'Navn',date:'Dato',duration:'Varighet',coaches:'Antall trenere',hall:'Hall',focus:'Treningsfokus',items:'Øvelser',evaluation:'Evaluering',completed:'Gjennomført',startTime:'Starttid',template:'Treningsmal'};
 export function mergeSession(draft:Session,current?:Session){
  const edited=cleanSession(draft);

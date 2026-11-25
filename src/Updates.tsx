@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-export function Updates({route,flush,error}:{route:string;flush:()=>boolean;error:string}){
+export function Updates({route,flush,error,active=false}:{route:string;flush:()=>boolean;error:string;active?:boolean}){
  const [waiting,setWaiting]=useState<ServiceWorker>(),[changed,setChanged]=useState(false),[later,setLater]=useState(false),[last,setLast]=useState('Ikke kontrollert ennå'),[message,setMessage]=useState('');
  const activating=useRef(false),latest=useRef(flush);latest.current=flush;
  async function check(){
@@ -19,9 +19,9 @@ export function Updates({route,flush,error}:{route:string;flush:()=>boolean;erro
  },[]);
  useEffect(()=>{
   // Never interrupt a hall session, editor, or a tab with an unresolved save error.
-  if((!waiting&&!changed)||later||error||route!=='/'||document.visibilityState!=='visible')return;
+  if((!waiting&&!changed)||later||error||active||route!=='/'||document.visibilityState!=='visible')return;
   const timer=setTimeout(()=>{if(!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName??''))activate();},1800);
   return ()=>clearTimeout(timer);
- },[waiting,changed,later,error,route]);
+ },[waiting,changed,later,error,route,active]);
  return <><details className="sync-panel"><summary>Appversjon {__APP_VERSION__} · oppdateringer</summary><p>Sist kontrollert: {last}</p><button onClick={()=>void check()}>Se etter oppdateringer</button><p role="status">{message}</p></details>{(waiting||changed)&&<section className="notice"><p>Ny versjon er klar. Lagrede data og utkast beholdes. På startsiden oppdateres appen automatisk når det er trygt.</p><div className="row wrap"><button onClick={activate}>Oppdater nå</button><button onClick={()=>setLater(true)}>Senere</button></div>{later&&<p>Oppdateringen venter til du velger Oppdater nå eller åpner appen på nytt.</p>}</section>}</>;
 }

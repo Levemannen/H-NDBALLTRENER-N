@@ -1,6 +1,6 @@
 # Håndballtrener’n
 
-Siste rettingsrunde: [3.0.2 – rettelser etter kvalitetssjekken](RAPPORT-3.0.2.md).
+Ny utviklingsrunde: [3.2.0 – fra plan til praksis](RAPPORT-3.2.0.md). Rapporten beskriver levert funksjonalitet, tester og gjenstående detaljkrav. Endringene klargjøres lokalt; publisering gjøres av eieren.
 
 Norsk React/TypeScript/Vite-app for håndballtrening, flere lag, SVG-øvelsesbank og offlinebruk. Appversjonen kommer kun fra package.json. Konto og ekstern KI er ikke nødvendig. Valgfri privat synkronisering er beskrevet i [SYNC.md](SYNC.md).
 
@@ -29,6 +29,14 @@ node scripts/diagram-report.mjs
 Nettlesertestene starter en isolert server under /handball/ og bruker syntetiske spillere. De åpner aldri den vanlige appens brukerdata. EDGE_PATH kan peke til Edge. SCREENSHOT_DIR lagrer skjermbilder ved 360, 390, 768 og 1280 px samt oversikter over alle 122 illustrasjoner. V3_ONLY, AUDIT_ONLY og SYNC_ONLY avgrenser feilsøking; full godkjenning bruker ingen av disse.
 
 Mobiltesten kontrollerer 320, 360, 390, 412, 768 og 1280 px, mørk visning, 200 % tekst og simulert tvungen mørk visning. Den sjekker elementoverlapp og faktisk visningsbredde og lagrer bilder i `qa/3.0.1/` (git-ignorert). Nettlesertesten tester også automatisk spillerimport, offlinebruk og PWA-oppdatering med nye JS- og CSS-adresser. `ROSTER_ONLY=1` avgrenser nettlesertesten til import; `MOBILE_MODE=large` avgrenser mobiltesten ved feilsøking.
+
+## Arbeidsflyten i 3.2
+
+Åpne dagens trening fra forsiden, registrer oppmøte, organiser og godkjenn lag, og start timeren i treningsvisningen. Plan B endrer oppsettet uten å fjerne originalplanen. Avslutt med valgfri evaluering. Pågående treninger og flere utkast lagres per lag og følger sikkerhetskopien.
+
+I planleggeren kan du låse øvelser, fylle ledig tid og se tidslinje med overganger. Under Mitt lag kan du legge inn faste treningsdager og opprette utkast fra sesongplanen. Øvelsesbanken har kompakt visning og flervalg; illustrasjoner har avspilling, speiling og PNG-eksport.
+
+De nye regresjonstestene ligger i `tests/workflow320.test.mjs` og `tests/browser-workflow320.mjs` og kjøres av de vanlige testkommandoene. `WORKFLOW_ONLY=1` avgrenser `node tests/browser.mjs` ved feilsøking.
 
 ## Nytt i 3.0-utgivelsen
 

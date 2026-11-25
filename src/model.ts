@@ -8,8 +8,11 @@ export type Player = {id:string; name:string; level:Level; archived?:boolean};
 export type Point = {x:number;y:number};
 export type SymbolKind = 'player'|'keeper'|'cone'|'ball'|'goal'|'hurdle'|'mat'|'empty'|'text'|'hoop'|'bench'|'wall';
 export type Diagram = {court:'full'|'half'|'crop'; marks:({id:string;kind:SymbolKind;label:string;team:0|1}&Point)[]; arrows:{id:string;kind:'run'|'pass'|'carry';from:Point;to:Point;bend?:Point;via?:Point[]}[]};
-export type Item = {id:string; exerciseId:string; minutes:number; comment:string; variant?:string};
-export type Session = {editBase?:string;completed?:boolean;planBOriginal?:Pick<Session,'items'|'players'|'attendees'|'attendanceRegistered'|'allocation'>;attendanceRegistered?:boolean;startTime?:string; allocation?:{name:string;players:string[]}[]; evaluation?:{rating:string;note:string};id:string; name:string; date:string; duration:number; players:number; coaches:number; hall:string; focus:string; attendees:string[]; items:Item[]; template:boolean};
+export type Item = {id:string; exerciseId:string; minutes:number; comment:string; variant?:string;locked?:boolean;transition?:number;allocationId?:string};
+export type AllocationSet={id:string;name:string;approved:boolean;groups:{name:string;players:string[];color?:string}[]};
+export type RunState={itemId:string;remaining:number;deadline?:number;runningSince?:number;startedAt:number;updatedAt:number;endedAt?:number;records:{itemId:string;exerciseId:string;seconds:number;skipped?:boolean}[]};
+export type PlanSnapshot=Pick<Session,'items'|'players'|'attendees'|'attendanceRegistered'|'allocation'>;
+export type Session = {state?:"draft"|"ready";runner?:RunState;originalPlan?:PlanSnapshot;allocations?:AllocationSet[];attendanceEvents?:{playerId:string;kind:"arrive"|"leave";at:number}[];archived?:boolean;favorite?:boolean;equipment?:string[];variety?:"known"|"balanced"|"new";editBase?:string;completed?:boolean;planBOriginal?:Pick<Session,'items'|'players'|'attendees'|'attendanceRegistered'|'allocation'>;attendanceRegistered?:boolean;startTime?:string; allocation?:{name:string;players:string[]}[]; evaluation?:{rating:string;note:string;tags?:string[];items?:Record<string,"bra"|"middels"|"dårlig">};id:string; name:string; date:string; duration:number; players:number; coaches:number; hall:string; focus:string; attendees:string[]; items:Item[]; template:boolean};
 export type Annotation = {note:string; variant:string; difficulty:string; metadata?:ExerciseMeta};
 export type DiagramStatus='Gjennomgått mot kilden'|'Til trenergjennomgang'|'Trenger avklaring';
 export type Data = {groupRules?:GroupRule[];diagramSteps?:Record<string,Diagram[]>;diagramReview?:Record<string,DiagramStatus>;draft?:Session; version:1; team:string; players:Player[]; sessions:Session[]; favorites:string[]; notes:Record<string,Annotation>; diagrams:Record<string,Diagram>; exercises:Exercise[]};
@@ -43,9 +46,18 @@ const exercise = (v:unknown) => object(v) && metadata(v) && key(v.id) && string(
 const point = (v:unknown) => object(v) && [v.x,v.y].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=100);
 const diagram = (v:unknown) => object(v) && ['full','half','crop'].includes(String(v.court)) && list(v.marks,m=>object(m)&&key(m.id)&&point(m)&&['player','keeper','cone','ball','goal','hurdle','mat','empty','text','hoop','bench','wall'].includes(String(m.kind))&&string(m.label)&&(m.team===0||m.team===1)) && list(v.arrows,a=>object(a)&&key(a.id)&&['run','pass','carry'].includes(String(a.kind))&&point(a.from)&&point(a.to)&&(a.bend===undefined||point(a.bend))&&(a.via===undefined||list(a.via,point)));
 const sessionExtras=(v:Obj)=>{
+  if(v.state!==undefined&&!['draft','ready'].includes(String(v.state)))return false;
+  if(['archived','favorite'].some(k=>v[k]!==undefined&&typeof v[k]!=='boolean'))return false;
+  if(v.equipment!==undefined&&!strings(v.equipment))return false;
+  if(v.variety!==undefined&&!['known','balanced','new'].includes(String(v.variety)))return false;
+  if(v.originalPlan!==undefined&&(!object(v.originalPlan)||v.originalPlan.originalPlan!==undefined||!validSession({...v,...v.originalPlan,allocation:v.originalPlan.allocation,originalPlan:undefined,editBase:undefined})))return false;
+  if(v.runner!==undefined){const r=v.runner;if(!object(r)||!key(r.itemId)||!integer(r.remaining)||!integer(r.startedAt)||!integer(r.updatedAt)||['deadline','runningSince','endedAt'].some(k=>r[k]!==undefined&&!integer(r[k]))||!list(r.records,x=>object(x)&&key(x.itemId)&&key(x.exerciseId)&&integer(x.seconds)&&(x.skipped===undefined||typeof x.skipped==='boolean')))return false;}
+  if(v.attendanceEvents!==undefined&&!list(v.attendanceEvents,x=>object(x)&&key(x.playerId)&&['arrive','leave'].includes(String(x.kind))&&integer(x.at)))return false;
+  if(v.allocations!==undefined&&(!list(v.allocations,x=>object(x)&&key(x.id)&&string(x.name)&&typeof x.approved==='boolean'&&list(x.groups,g=>object(g)&&string(g.name)&&list(g.players,key)&&(g.color===undefined||/^#[0-9a-fA-F]{6}$/.test(String(g.color))))&&new Set((x.groups as {players:string[]}[]).flatMap(g=>g.players)).size===(x.groups as {players:string[]}[]).flatMap(g=>g.players).length)||new Set((v.allocations as AllocationSet[]).map(x=>x.id)).size!==(v.allocations as AllocationSet[]).length))return false;
+  if(object(v.evaluation)&&((v.evaluation.tags!==undefined&&!strings(v.evaluation.tags))||(v.evaluation.items!==undefined&&!record(v.evaluation.items,x=>['bra','middels','dårlig'].includes(String(x))))))return false;
   if(v.editBase!==undefined){if(!string(v.editBase))return false;try{const base=JSON.parse(v.editBase);if(!object(base)||base.id!==v.id||base.editBase!==undefined||!validSession(base))return false;}catch{return false;}}
   if(v.completed!==undefined&&typeof v.completed!=='boolean')return false;
-  if(v.planBOriginal!==undefined){if(!object(v.planBOriginal)||!validSession({...v,...v.planBOriginal,planBOriginal:undefined}))return false;}
+  if(v.planBOriginal!==undefined){if(!object(v.planBOriginal)||!validSession({...v,...v.planBOriginal,allocation:v.planBOriginal.allocation,planBOriginal:undefined}))return false;}
   if(v.attendanceRegistered!==undefined&&typeof v.attendanceRegistered!=='boolean')return false;
   if(v.startTime!==undefined&&(!string(v.startTime)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.startTime)))return false;
   if(v.evaluation!==undefined&&(!object(v.evaluation)||!['','bra','middels','dårlig'].includes(String(v.evaluation.rating))||!string(v.evaluation.note)))return false;
@@ -56,7 +68,7 @@ const sessionExtras=(v:Obj)=>{
   }
   return true;
 };
-export const validSession = (v:unknown) => object(v)&&sessionExtras(v)&&key(v.id)&&string(v.name)&&string(v.date)&&/^\d{4}-\d{2}-\d{2}$/.test(v.date)&&integer(v.duration,1)&&integer(v.players)&&integer(v.coaches)&&string(v.hall)&&string(v.focus)&&strings(v.attendees)&&new Set(v.attendees as string[]).size===(v.attendees as string[]).length&&typeof v.template==='boolean'&&list(v.items,i=>object(i)&&key(i.id)&&key(i.exerciseId)&&integer(i.minutes,1)&&string(i.comment)&&(i.variant===undefined||string(i.variant)))&&new Set((v.items as Item[]).map(i=>i.id)).size===(v.items as Item[]).length;
+export const validSession = (v:unknown) => object(v)&&sessionExtras(v)&&key(v.id)&&string(v.name)&&string(v.date)&&/^\d{4}-\d{2}-\d{2}$/.test(v.date)&&integer(v.duration,1)&&integer(v.players)&&integer(v.coaches)&&string(v.hall)&&string(v.focus)&&strings(v.attendees)&&new Set(v.attendees as string[]).size===(v.attendees as string[]).length&&typeof v.template==='boolean'&&list(v.items,i=>object(i)&&key(i.id)&&key(i.exerciseId)&&integer(i.minutes,1)&&string(i.comment)&&(i.variant===undefined||string(i.variant))&&(i.locked===undefined||typeof i.locked==='boolean')&&(i.transition===undefined||integer(i.transition))&&(i.allocationId===undefined||key(i.allocationId)))&&new Set((v.items as Item[]).map(i=>i.id)).size===(v.items as Item[]).length;
 export function parseData(text:string):Data {
   const v:unknown = JSON.parse(text);
   if (!object(v)||v.version!==1||!string(v.team)||!list(v.players,p=>object(p)&&key(p.id)&&string(p.name)&&[1,2,3,4].includes(p.level as number)&&(p.archived===undefined||typeof p.archived==='boolean'))||!list(v.sessions,validSession)||!list(v.favorites,key)||!record(v.notes,n=>object(n)&&string(n.note)&&string(n.variant)&&string(n.difficulty)&&(n.metadata===undefined||metadata(n.metadata)))||!record(v.diagrams,diagram)||!list(v.exercises,exercise)) throw new Error('Ugyldig sikkerhetskopi eller dataversjon.');
@@ -80,7 +92,7 @@ export function saveData(storage:Pick<Storage,'setItem'>,data:Data) {
   parseData(text);
   storage.setItem(storageKey,text);
 }
-export function suggest(s:Session, exercises:Exercise[],preferences?:{favorites:string[];successful:string[]}):Item[] {
+export function suggest(s:Session, exercises:Exercise[],preferences?:{favorites:string[];successful:string[];recent?:string[];variety?:string}):Item[] {
   if(playerCount(s)===0)return [];
   const eligible=exercises.filter(e=>!e.unresolved&&fits(e,s)&&!(s.coaches===1&&planningMeta(e).oneCoach===false));
   const slots=Math.max(4,Math.min(12,Math.ceil(s.duration/15)));
@@ -95,7 +107,7 @@ export function suggest(s:Session, exercises:Exercise[],preferences?:{favorites:
       const repeated=previous?.categories.length&&e.categories.every(c=>previous.categories.includes(c));
       const meta=planningMeta(e);
       const practical=s.coaches===1?(Number(meta.oneCoach===true)*6-Number(meta.oneCoach===false)*12+Number(meta.queue==='lav')*3+Number(meta.independent)*3):0;
-      return practical+Number(preferences?.favorites.includes(e.id))*2+Number(preferences?.successful.includes(e.id))*2+Number(phaseMatch)*100+Number(Boolean(s.focus&&matches(e,s.focus)))*12+Number(Boolean(s.focus&&s.focus.toLowerCase().split(/\s+og\s+|,/).some(t=>t.trim()&&matches(e,t.trim()))))*6+Number(Boolean(previous&&(e.skillTags??e.skills).some(t=>(previous.skillTags??previous.skills).includes(t))))*3+Number(Boolean(e.minutes))+Number(Boolean(e.players))-Number(Boolean(repeated))*4;
+      return (preferences?.recent?.includes(e.id)?(preferences.variety==='known'?8:preferences.variety==='new'?-8:0):0)+practical+Number(preferences?.favorites.includes(e.id))*2+Number(preferences?.successful.includes(e.id))*2+Number(phaseMatch)*100+Number(Boolean(s.focus&&matches(e,s.focus)))*12+Number(Boolean(s.focus&&s.focus.toLowerCase().split(/\s+og\s+|,/).some(t=>t.trim()&&matches(e,t.trim()))))*6+Number(Boolean(previous&&(e.skillTags??e.skills).some(t=>(previous.skillTags??previous.skills).includes(t))))*3+Number(Boolean(e.minutes))+Number(Boolean(e.players))-Number(Boolean(repeated))*4;
     };
     ranked.sort((a,b)=>score(b)-score(a));
     const e=ranked[0];if(!e)continue;
@@ -149,13 +161,13 @@ export const activePlayers=(data:Data)=>data.players.filter(p=>!p.archived);
 export const playerCount=(s:Session)=>s.attendanceRegistered||s.attendees.length?s.attendees.length:s.players;
 export const hallFits=(known:string[]|undefined,hall:string)=>!known?.length||known.includes(hall)||(['gymsal','liten'].includes(hall)&&known.some(h=>['gymsal','liten'].includes(h)));
 export const fits=(e:Exercise,s:Session)=> (!e.players||(playerCount(s)>=e.players[0]&&playerCount(s)<=e.players[1]))&&hallFits(e.halls,s.hall)&&(e.coaches===undefined||e.coaches<=s.coaches);
-export const cloneSession=(s:Session,template=false):Session=>({...structuredClone(s),editBase:undefined,id:uid(),date:dateToday(),name:s.name+(template?' – mal':' – kopi'),template,attendanceRegistered:false,attendees:[],allocation:undefined,evaluation:undefined,completed:false,planBOriginal:undefined,items:s.items.map(i=>({...i,id:uid()}))});
+export const cloneSession=(s:Session,template=false):Session=>({...structuredClone(s),editBase:undefined,runner:undefined,originalPlan:undefined,allocations:undefined,attendanceEvents:undefined,archived:false,favorite:false,state:undefined,id:uid(),date:dateToday(),name:s.name+(template?' – mal':' – kopi'),template,attendanceRegistered:false,attendees:[],allocation:undefined,evaluation:undefined,completed:false,planBOriginal:undefined,items:s.items.map(i=>({...i,id:uid(),allocationId:undefined}))});
 export function archivePlayer(data:Data,id:string,archived=true):Data {
   return {...data,players:data.players.map(p=>p.id===id?{...p,archived}:p)};
 }
 export function removeFromSession(s:Session,id:string):Session {
  const clean=(value:Pick<Session,'attendees'|'allocation'>)=>({attendees:value.attendees.filter(p=>p!==id),allocation:value.allocation?.map(g=>({...g,players:g.players.filter(p=>p!==id)}))});
- return {...s,...clean(s),planBOriginal:s.planBOriginal?{...s.planBOriginal,...clean(s.planBOriginal)}:undefined};
+ return {...s,...clean(s),allocations:s.allocations?.map(a=>({...a,groups:a.groups.map(g=>({...g,players:g.players.filter(p=>p!==id)}))})),attendanceEvents:s.attendanceEvents?.filter(e=>e.playerId!==id),originalPlan:s.originalPlan?{...s.originalPlan,...clean(s.originalPlan)}:undefined,planBOriginal:s.planBOriginal?{...s.planBOriginal,...clean(s.planBOriginal)}:undefined};
 }
 export function deletePlayer(data:Data,id:string):Data {
   return {...data,players:data.players.filter(p=>p.id!==id),groupRules:data.groupRules?.filter(r=>r.a!==id&&r.b!==id),sessions:data.sessions.map(s=>removeFromSession(s,id))};

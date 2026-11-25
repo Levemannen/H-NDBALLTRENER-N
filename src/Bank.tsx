@@ -1,5 +1,7 @@
+import {exerciseFit} from './sessionPlanning';
+import type {Session} from './model';
 import {planningMeta,planningLabels} from './planningMeta';
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {Bookmark,ChevronLeft,ChevronRight,Clipboard,Search,SlidersHorizontal,Target,Timer,Users,TrafficCone} from 'lucide-react';
 import raw from './bank.json';
 import {type Data,type Exercise,type Annotation,halls,intro,norm,section,uid,hallFits} from './model';
@@ -12,15 +14,20 @@ import {chosenVariant,variants} from './variants';
 export const standard:Exercise[]=raw.exercises;
 const difficulty=['Lett','Middels','Krevende'];
 export const annotation:Annotation={note:'',variant:'',difficulty:''};
-export function ExercisePicker({exercises,onSelect,favorites=[]}:{exercises:Exercise[];favorites?:string[];onSelect:(e:Exercise)=>void}){
+export function ExercisePicker({exercises,onSelect,favorites=[],session}:{exercises:Exercise[];session?:Session;favorites?:string[];onSelect:(e:Exercise)=>void}){
   const [q,set]=useState('');
   const [favorite,setFavorite]=useState(false);
   const [category,setCategory]=useState('');
   const filtered=searchBank(exercises.filter(e=>!e.unresolved&&(!favorite||favorites.includes(e.id))&&(!category||e.categories.includes(category))),q);
-  return <div className="stack"><label>Søk etter øvelser<input type="search" value={q} onChange={e=>set(e.target.value)} placeholder="Navn, kategori eller ferdighet"/></label><label>Kategori<select value={category} onChange={e=>setCategory(e.target.value)}><option value="">Alle</option>{[...new Set(exercises.flatMap(e=>e.categories))].map(c=><option key={c}>{c}</option>)}</select></label><label className="check"><input type="checkbox" checked={favorite} onChange={e=>setFavorite(e.target.checked)}/> Favoritter</label><p>{filtered.length} treff</p><div className="picker">{filtered.map(e=><article className="picker-card" key={e.id}><h3>{e.title}</h3><p>{intro(e)}</p><div className="picker-actions"><span>{e.minutes?e.minutes.join('–')+' min':'Varighet ikke oppgitt'}</span><button type="button" aria-label={'Velg '+e.title} onClick={()=>onSelect(e)}>Velg øvelse <ChevronRight size={16}/></button></div></article>)}{!filtered.length&&<p>Ingen treff.</p>}</div></div>;
+  return <div className="stack"><label>Søk etter øvelser<input type="search" value={q} onChange={e=>set(e.target.value)} placeholder="Navn, kategori eller ferdighet"/></label><label>Kategori<select value={category} onChange={e=>setCategory(e.target.value)}><option value="">Alle</option>{[...new Set(exercises.flatMap(e=>e.categories))].map(c=><option key={c}>{c}</option>)}</select></label><label className="check"><input type="checkbox" checked={favorite} onChange={e=>setFavorite(e.target.checked)}/> Favoritter</label><p>{filtered.length} treff</p><div className="picker">{filtered.map(e=><article className="picker-card" key={e.id}><h3>{e.title}</h3><p>{intro(e)}</p>{session&&<p>{exerciseFit(e,session)}{session.items.some(i=>i.exerciseId===e.id)?' · Allerede valgt':''}</p>}<div className="picker-actions"><span>{e.minutes?e.minutes.join('–')+' min':'Varighet ikke oppgitt'}</span><button type="button" aria-label={'Velg '+e.title} onClick={()=>onSelect(e)}>Velg øvelse <ChevronRight size={16}/></button></div></article>)}{!filtered.length&&<p>Ingen treff.</p>}</div></div>;
 }
 export const emptyFilters={q:'',category:'',skill:'',type:'',players:'',hall:'',minutes:'',coaches:'',difficulty:'',equipment:'',favorite:false};
-export function Bank({exercises,data,update,add,notify,filter,set}:{exercises:Exercise[];data:Data;update:(fn:(d:Data)=>Data)=>boolean;add:(e:Exercise)=>void;notify:(message:string)=>void;filter:typeof emptyFilters;set:(filters:typeof emptyFilters)=>void}){
+export function Bank({exercises,data,update,add,notify,filter,set,addMany,undoAdd}:{exercises:Exercise[];data:Data;update:(fn:(d:Data)=>Data)=>boolean;add:(e:Exercise)=>void;notify:(message:string)=>void;filter:typeof emptyFilters;set:(filters:typeof emptyFilters)=>void;addMany?:(items:Exercise[])=>void;undoAdd?:()=>void}){
+  const [selection,setSelection]=useState<string[]>([]);
+  const [view,setView]=useState(()=>{try{return localStorage.getItem('handball.bank.view')||'cards';}catch{return 'cards';}});
+  const [sort,setSort]=useState('relevance');
+  useEffect(()=>{try{localStorage.setItem('handball.bank.view',view);}catch{}},[view]);
+  useEffect(()=>{let y=0;try{y=Number(sessionStorage.getItem('handball.bank.scroll')??0);}catch{}requestAnimationFrame(()=>window.scrollTo(0,y));return ()=>{};},[]);
   const [create,setCreate]=useState(false);
   const [title,setTitle]=useState('');
   const [desc,setDesc]=useState('');
@@ -28,8 +35,10 @@ export function Bank({exercises,data,update,add,notify,filter,set}:{exercises:Ex
   const cats=useMemo(()=>[...new Set(catalog.flatMap(e=>e.categories))].sort((a,b)=>a.localeCompare(b,'nb')),[catalog]);
   const filtered=useMemo(()=>searchBank(catalog,filter.q).filter(e=>{
     const meta=editorial(e);
-    return (!filter.category||e.categories.includes(filter.category))&&(!filter.skill||meta.skills.includes(filter.skill))&&(!filter.type||meta.types.includes(filter.type))&&(!filter.players||(e.players&&Number(filter.players)>=e.players[0]&&Number(filter.players)<=e.players[1]))&&(!filter.minutes||(e.minutes&&Number(filter.minutes)>=e.minutes[0]&&Number(filter.minutes)<=e.minutes[1]))&&(!filter.hall||hallFits(e.halls,filter.hall))&&(!filter.coaches||meta.coaches===undefined||meta.coaches<=Number(filter.coaches))&&(!filter.equipment||norm(section(e,'Du trenger').join(' ')).includes(norm(filter.equipment)))&&(!filter.difficulty||data.notes[e.id]?.difficulty===filter.difficulty)&&(!filter.favorite||data.favorites.includes(e.id));
+    return (!filter.category||e.categories.includes(filter.category))&&(!filter.skill||meta.skills.includes(filter.skill))&&(!filter.type||meta.types.includes(filter.type))&&(!filter.players||(!e.players||Number(filter.players)>=e.players[0]&&Number(filter.players)<=e.players[1]))&&(!filter.minutes||(!e.minutes||Number(filter.minutes)>=e.minutes[0]&&Number(filter.minutes)<=e.minutes[1]))&&(!filter.hall||hallFits(e.halls,filter.hall))&&(!filter.coaches||meta.coaches===undefined||meta.coaches<=Number(filter.coaches))&&(!filter.equipment||norm(section(e,'Du trenger').join(' ')).includes(norm(filter.equipment)))&&(!filter.difficulty||data.notes[e.id]?.difficulty===filter.difficulty)&&(!filter.favorite||data.favorites.includes(e.id));
   }),[catalog,data.notes,data.favorites,filter]);
+  const lastUsed=(id:string)=>data.sessions.filter(s=>s.completed&&s.items.some(i=>i.exerciseId===id)).map(s=>s.date).sort().at(-1)??'';
+  const displayed=[...filtered].sort((a,b)=>sort==='name'?a.title.localeCompare(b.title,'nb'):sort==='number'?(a.number??9999)-(b.number??9999):sort==='recent'?lastUsed(b.id).localeCompare(lastUsed(a.id)):0);
   return <div className="page stack">
     <a className="button" href="#/fem-min">5 min til overs</a><div className="heading row between"><h1>Øvelsesbank</h1><button onClick={()=>setCreate(!create)}>{create?'Lukk':'Ny øvelse'}</button></div>
     {create&&<form className="panel stack" onSubmit={event=>{
@@ -44,13 +53,13 @@ export function Bank({exercises,data,update,add,notify,filter,set}:{exercises:Ex
       {([['players','Antall spillere'],['minutes','Varighet i minutter'],['coaches','Tilgjengelige trenere'],['equipment','Utstyr']] as const).map(([k,label])=><label key={k}>{label}<input type={k==='equipment'?'search':'number'} min="1" value={filter[k]} onChange={e=>set({...filter,[k]:e.target.value})}/></label>)}
     </div></details>
     <div className="row between wrap"><p className="muted" aria-live="polite">{filtered.length} øvelser</p><div className="row wrap"><label className="check"><input type="checkbox" checked={filter.favorite} onChange={e=>set({...filter,favorite:e.target.checked})}/> Favoritter</label>{Object.values(filter).some(Boolean)&&<button onClick={()=>set(emptyFilters)}>Nullstill søk og filtre</button>}</div></div>
-    <p className="muted">Hall og trenerfilter inkluderer øvelser med ukjente krav. Kontroller organiseringen før bruk.</p><div className="cards">{filtered.map(e=>{
+    <div className="fields"><label>Visning<select value={view} onChange={e=>setView(e.target.value)}><option value="cards">Kort med illustrasjoner</option><option value="compact">Kompakte kort</option><option value="list">Liste</option></select></label><label>Sorter øvelser<select value={sort} onChange={e=>setSort(e.target.value)}><option value="relevance">Relevans</option><option value="number">Nummer</option><option value="name">Navn</option><option value="recent">Sist brukt</option></select></label></div>{addMany&&<div className="row wrap"><button type="button" disabled={!selection.length} onClick={()=>{addMany(catalog.filter(e=>selection.includes(e.id)));setSelection([]);}}>Legg til valgte ({selection.length})</button><button type="button" onClick={undoAdd}>Angre siste tillegg</button></div>}<p className="muted">Hall og trenerfilter inkluderer øvelser med ukjente krav. Kontroller organiseringen før bruk.</p><div className={'cards bank-'+view}>{displayed.map(e=>{
       const diagram=diagramFor(e.id,data.diagrams);
       const favorite=data.favorites.includes(e.id);
       return <article className="panel exercise-card" key={e.id}>
         <div className="row between"><span className="chip">{e.categories[0]||'Øvelse'}</span><button className="icon-button favorite" aria-label={'Favoritt: '+e.title} aria-pressed={favorite} onClick={()=>update(d=>({...d,favorites:favorite?d.favorites.filter(id=>id!==e.id):[...d.favorites,e.id]}))}><Bookmark size={19} fill={favorite?'currentColor':'none'}/></button></div>
-        <a className="exercise-link stack" href={'#/ovelse/'+e.id}>{diagram&&<div className="exercise-preview"><Court diagram={diagram}/></div>}<h2>{e.number&&<small>{e.number}. </small>}{e.title}</h2><p>{intro(e)}</p><div className="row between muted"><span>{[e.minutes&&e.minutes.join('–')+' min',e.players&&e.players.join('–')+' '+(e.meta?.includes('keepere')?'keepere':'spillere'),e.unresolved&&'Må avklares'].filter(Boolean).join(' · ')}</span><ChevronRight size={19}/></div></a>
-        {!e.unresolved&&<button onClick={()=>add(e)}>Legg til i trening</button>}
+        <a className="exercise-link stack" onClick={()=>{try{sessionStorage.setItem('handball.bank.scroll',String(scrollY));}catch{}}} href={'#/ovelse/'+e.id}>{view==='cards'&&diagram&&<div className="exercise-preview"><Court diagram={diagram}/></div>}<h2>{e.number&&<small>{e.number}. </small>}{e.title}</h2>{view!=='list'&&<p>{intro(e)}</p>}<div className="row between muted"><span>{[e.minutes&&e.minutes.join('–')+' min',e.players&&e.players.join('–')+' '+(e.meta?.includes('keepere')?'keepere':'spillere'),e.unresolved&&'Må avklares'].filter(Boolean).join(' · ')}</span><ChevronRight size={19}/></div></a>
+        {!e.unresolved&&<div className="row wrap"><button onClick={()=>add(e)}>Legg til i trening</button>{addMany&&<label className="check"><input type="checkbox" checked={selection.includes(e.id)} onChange={event=>setSelection(event.target.checked?[...selection,e.id]:selection.filter(id=>id!==e.id))}/> Velg flere</label>}</div>}
       </article>;
     })}</div>
     {!filtered.length&&<p className="panel muted">{filter.favorite?'Ingen favoritter passer med søket. Bruk bokmerket på en øvelse for å lagre den her.':'Ingen øvelser passer med søket og filtrene.'}</p>}
