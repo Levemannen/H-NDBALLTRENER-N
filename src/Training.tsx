@@ -1,3 +1,8 @@
+import {SessionHistory} from './SessionHistory';
+import {SessionTimeline} from './SessionTimeline';
+import {SessionPlayers} from './SessionPlayers';
+import {fillSession,optimizeTime,sessionCheck,equipmentList} from './sessionPlanning';
+import {replaceExercise,statusOf} from './sessionFlow';
 import {rememberPlan,adjustRemaining} from './planB';
 import {planningReason} from './planningMeta';
 import {useEffect,useMemo,useState} from 'react';
@@ -13,13 +18,15 @@ export function Attendance({data,selected,change}:{data:Data;selected:string[];c
     {data.players.length?<div className="attendance">{data.players.filter(p=>!p.archived||selected.includes(p.id)).map(p=><label className="check" key={p.id}><input type="checkbox" checked={selected.includes(p.id)} onChange={e=>change(e.target.checked?[...selected,p.id]:selected.filter(id=>id!==p.id))}/>{p.name}{p.archived?' (arkivert)':''}</label>)}</div>:<p className="muted">Registrer spillere under Mitt lag.</p>}
   </div>;
 }
-export function Planner({draft,set,exercises,data,save,notify,newDraft,personalize}:{newDraft:()=>void;personalize:boolean;draft:Session;set:(s:Session)=>void;exercises:Exercise[];data:Data;save:()=>void;notify:(message:string)=>void}){
+export function Planner({draft,set,exercises,data,save,start,notify,newDraft,personalize}:{newDraft:()=>void;personalize:boolean;draft:Session;set:(s:Session)=>void;exercises:Exercise[];data:Data;save:()=>void;start?:()=>void;notify:(message:string)=>void}){
+  const [undo,setUndo]=useState<Session[]>([]);
+  const [advanced,setAdvanced]=useState(false);
   const [picker,setPicker]=useState<-1|number>();
   const [reuse,setReuse]=useState('');
   const [drag,setDrag]=useState<number>();
   const [message,setMessage]=useState('');
   const catalog=useMemo(()=>exercises.map(e=>data.notes[e.id]?.metadata?{...e,...data.notes[e.id].metadata}:e),[exercises,data.notes]);
-  const change=(patch:Partial<Session>)=>set({...draft,...patch});
+  const change=(patch:Partial<Session>)=>{setUndo([...undo.slice(-19),structuredClone(draft)]);set({...draft,...patch});};
   function move(from:number,to:number){
     if(to<0||to>=draft.items.length||from===to)return;
     const items=[...draft.items];
@@ -27,30 +34,30 @@ export function Planner({draft,set,exercises,data,save,notify,newDraft,personali
     change({items});
   }
   function generate(){
-    const items=suggest(draft,catalog,personalize?{favorites:data.favorites,successful:data.sessions.filter(s=>s.evaluation?.rating==='bra').flatMap(s=>s.items.map(i=>i.exerciseId))}:undefined);
+    const items=fillSession(draft,catalog,data,false,personalize);
     if(!items.length){setMessage('Ingen øvelser passer med rammene. Endre antall spillere, hall eller varighet.');return;}
-    if(draft.items.length&&!confirm('Erstatte øvelsene i planen med forslaget?'))return;
+
     change({items});
     const difference=draft.duration-items.reduce((sum,i)=>sum+i.minutes,0);
     setMessage(difference?'Forslaget har '+difference+' minutter ledig tid. Du kan justere planen.':'Forslaget er lagt inn og kan redigeres.');
   }
   return <form className="page stack" onSubmit={e=>{e.preventDefault();save();}}>
     <div className="heading"><h1>{draft.template?'Rediger treningsmal':'Lag trening'}</h1></div>
-    <ShareSession session={draft} team={data.team} exercises={exercises}/><section className="panel stack"><h2>Øktdetaljer</h2><div className="fields">
+    <div className="row wrap"><button type="button" onClick={()=>setAdvanced(!advanced)}>{advanced?'Hurtigplanlegging':'Avansert planlegging'}</button><button type="button" disabled={!undo.length} onClick={()=>{set(undo.at(-1)!);setUndo(undo.slice(0,-1));}}>Angre planendring</button></div><ShareSession session={draft} team={data.team} exercises={exercises}/><section className="panel stack"><h2>Øktdetaljer</h2><div className="fields">
       <label>Navn<input value={draft.name} onChange={e=>change({name:e.target.value})} placeholder={'Trening '+draft.date}/></label>
       <label>Starttid (valgfritt)<input type="time" value={draft.startTime??''} onChange={e=>change({startTime:e.target.value||undefined})}/></label><label>Dato<input required type="date" value={draft.date} onChange={e=>change({date:e.target.value})}/></label>
       {([['duration','Planlagt varighet (min)',1],['players','Forventet spillerantall',0],['coaches','Antall trenere',0]] as const).map(([key,label,min])=><label key={key}>{label}<input type="number" min={min} required value={draft[key]} onChange={e=>change({[key]:Math.max(min,Number(e.target.value))})}/></label>)}
       <label>Hallstørrelse<select value={draft.hall} onChange={e=>change({hall:e.target.value})}>{halls.map(h=><option key={h} value={h}>{h[0].toUpperCase()+h.slice(1)}</option>)}</select></label>
-      <label>Treningsfokus<input value={draft.focus} onChange={e=>change({focus:e.target.value})} placeholder="F.eks. pasning og mottak"/></label>
+      <label hidden={!advanced}>Treningsfokus<input value={draft.focus} onChange={e=>change({focus:e.target.value})} placeholder="F.eks. pasning og mottak"/></label>
     </div></section>
-    <p className="muted">{(draft.attendanceRegistered||draft.attendees.length)?`Registrert oppmøte: ${playerCount(draft)} spillere. Dette antallet brukes i forslag.`:`Ingen oppmøteliste registrert. Forslag bruker ${draft.players} forventede spillere.`}</p><details className="panel"><summary>Oppmøte ({draft.attendees.length})</summary><Attendance data={data} selected={draft.attendees} change={attendees=>change({attendees,attendanceRegistered:true,allocation:draft.allocation?.map(g=>({...g,players:g.players.filter(id=>attendees.includes(id))}))})}/><a className="button" href="#/lag">Fordel spillere i lag</a></details>
-    <section className="stack">
+    <p className="muted">{(draft.attendanceRegistered||draft.attendees.length)?`Registrert oppmøte: ${playerCount(draft)} spillere. Dette antallet brukes i forslag.`:`Ingen oppmøteliste registrert. Forslag bruker ${draft.players} forventede spillere.`}</p><details className="panel"><summary>Oppmøte ({draft.attendees.length})</summary><Attendance data={data} selected={draft.attendees} change={attendees=>change({attendees,attendanceRegistered:true,allocation:draft.allocation?.map(g=>({...g,players:g.players.filter(id=>attendees.includes(id))}))})}/><details><summary>Organiser lag i denne treningen</summary><SessionPlayers session={draft} data={data} save={next=>change(next)}/></details></details>
+    <SessionTimeline session={draft} exercises={catalog} save={next=>change(next)}/><details className="panel"><summary>Øktkontroll og utstyr</summary>{sessionCheck(draft,catalog).map((r,i)=><p key={i}>{({fact:'Registrert',advice:'Vurder',unknown:'Uavklart',good:'Bra'})[r.kind]}: {r.text}</p>)}<h3>Utstyr og rigging</h3><p>Utstyr kan gjenbrukes mellom øvelser. Mengdene nedenfor summeres ikke. Kontroller samtidig behov ved stasjoner.</p>{equipmentList(draft,catalog).map(line=><p key={line}>{line}</p>)}{!equipmentList(draft,catalog).length&&<p>Utstyr er ikke dokumentert.</p>}</details><section className="stack">
       <div className="row between wrap"><h2>Øvelser</h2><span className="chip"><Clock3 size={17}/> {total(draft)} av {draft.duration} min · {Math.abs(draft.duration-total(draft))} min {total(draft)>draft.duration?'over tiden':'ledig'}</span></div>
       <div className="row wrap"><button type="button" onClick={()=>setPicker(picker===-1?undefined:-1)}><Plus size={18}/> Legg til øvelse</button><button type="button" onClick={generate}>Foreslå trening</button></div>
-      {message&&<p role="status">{message}</p>}
+      <label>Repetisjon og variasjon<select value={draft.variety??'balanced'} onChange={e=>change({variety:e.target.value as Session['variety']})}><option value="known">Kjente øvelser</option><option value="balanced">Balanse</option><option value="new">Nye øvelser</option></select></label><div className="row wrap"><button type="button" onClick={()=>change({items:fillSession(draft,catalog,data,true,personalize)})}>Fyll ledig tid</button><button type="button" onClick={()=>change({items:optimizeTime(draft,catalog)})}>Tilpass varighet</button></div>{message&&<p role="status">{message}</p>}
       <div className={picker!==undefined?'plan-columns':'stack'}>
-      {picker!==undefined&&<div className="panel stack plan-picker"><div className="row between"><h3>{picker===-1?'Legg til øvelse':'Bytt øvelse'}</h3><button type="button" onClick={()=>setPicker(undefined)}>Lukk</button></div><ExercisePicker favorites={data.favorites} key={picker} exercises={catalog} onSelect={e=>{
-        change({items:picker===-1?[...draft.items,itemFor(e)]:draft.items.map((item,n)=>n===picker?{...item,exerciseId:e.id,variant:undefined}:item)});
+      {picker!==undefined&&<div className="panel stack plan-picker"><div className="row between"><h3>{picker===-1?'Legg til øvelse':'Bytt øvelse'}</h3><button type="button" onClick={()=>setPicker(undefined)}>Lukk</button></div><ExercisePicker session={draft} favorites={data.favorites} key={picker} exercises={catalog} onSelect={e=>{
+        change({items:picker===-1?[...draft.items,itemFor(e)]:draft.items.map((item,n)=>n===picker?replaceExercise(item,e.id):item)});
         notify(picker===-1?'Øvelse lagt til':'Øvelse byttet');
         if(picker!==-1)setPicker(undefined);
       }}/></div>}
@@ -69,76 +76,28 @@ export function Planner({draft,set,exercises,data,save,notify,newDraft,personali
             return String(Math.floor(time/60)%24).padStart(2,'0')+':'+String(time%60).padStart(2,'0');
           }).join(' – ')}</p>}
           {exercise&&<p className="muted">{planningReason(catalog.find(e=>e.id===exercise.id)!,draft.coaches,personalize&&data.favorites.includes(exercise.id),personalize&&data.sessions.some(s=>s.evaluation?.rating==='bra'&&s.items.some(i=>i.exerciseId===exercise.id)))}</p>}<div className="fields">{exercise&&<label>Variant<select aria-label="Variant" value={item.variant??''} onChange={e=>update({variant:e.target.value||undefined})}><option value="">Grunnøvelse</option>{variants(exercise).map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label>}<label>Minutter<input type="number" required min="1" value={item.minutes} onChange={e=>update({minutes:Math.max(1,Number(e.target.value))})}/></label><label>Kommentar<input value={item.comment} onChange={e=>update({comment:e.target.value})}/></label></div>
-          <div className="row wrap"><button type="button" onClick={()=>setPicker(i)}>Bytt øvelse</button><button type="button" onClick={()=>change({items:[...draft.items.slice(0,i+1),{...item,id:uid()},...draft.items.slice(i+1)]})}>Dupliser øvelse</button>{exercise&&<a className="button" href={'#/ovelse/'+exercise.id}>Vis beskrivelse</a>}</div>
+          <label className="check"><input type="checkbox" checked={Boolean(item.locked)} onChange={e=>update({locked:e.target.checked})}/> Lås øvelse ved nye forslag</label>{advanced&&<><label>Overgang / rigging (min)<input type="number" min="0" value={item.transition??0} onChange={e=>update({transition:Math.max(0,Math.floor(Number(e.target.value)))})}/></label><label>Lagoppsett for øvelsen<select value={item.allocationId??''} onChange={e=>update({allocationId:e.target.value||undefined})}><option value="">Ingen kobling</option>{draft.allocations?.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label></>}<div className="row wrap"><button type="button" onClick={()=>setPicker(i)}>Bytt øvelse</button><button type="button" onClick={()=>change({items:[...draft.items.slice(0,i+1),{...item,id:uid()},...draft.items.slice(i+1)]})}>Dupliser øvelse</button>{exercise&&<a className="button" href={'#/ovelse/'+exercise.id}>Vis beskrivelse</a>}</div>
           {exercise&&!fits(catalog.find(e=>e.id===exercise.id)!,draft)&&<p className="notice">Registrerte rammer passer ikke med denne øvelsen. Du kan beholde den eller velge et alternativ.</p>}
-          {exercise&&<details><summary>Foreslå alternativ</summary>{alternatives(catalog.find(e=>e.id===exercise.id)!,draft,catalog).map(e=><button type="button" key={e.id} onClick={()=>update({exerciseId:e.id,variant:undefined})}>{e.title} · Felles ferdighet eller kategori{e.players?' · '+e.players.join('–')+' spillere':''}</button>)}</details>}
+          {exercise&&<details><summary>Foreslå alternativ</summary>{alternatives(catalog.find(e=>e.id===exercise.id)!,draft,catalog).map(e=><button type="button" key={e.id} onClick={()=>update({exerciseId:e.id,variant:undefined,comment:''})}>{e.title} · Felles ferdighet eller kategori{e.players?' · '+e.players.join('–')+' spillere':''}</button>)}</details>}
         </div>;
       })}
       </div></div>
     </section>
-    <div className="row wrap"><button className="primary">Lagre {draft.template?'mal':'trening'}</button><button type="button" onClick={()=>{if(confirm('Starte på en ny trening? Lagre eller eksporter utkastet først hvis du vil beholde det.'))newDraft();}}>Ny trening</button></div>
+    <div className="row wrap"><button className="primary">Lagre {draft.template?'mal':'trening'}</button><button type="button" onClick={newDraft}>Ny trening</button>{start&&<button type="button" disabled={!draft.items.length||draft.template} onClick={start}>Lagre og start trening</button>}</div>
   </form>;
 }
-export function Saved({data,edit,update,exercises}:{data:Data;exercises:Exercise[];edit:(s:Session)=>void;update:(fn:(d:Data)=>Data)=>void}){
+export function Saved({data,edit,update,exercises,drafts=[],targets=[],copyTo}:{data:Data;drafts?:Session[];targets?:{id:string;name:string}[];copyTo?:(s:Session,teamId:string)=>void;exercises:Exercise[];edit:(s:Session)=>void;update:(fn:(d:Data)=>Data)=>void}){
   const [q,set]=useState('');
   const [mode,setMode]=useState('all');
-  const filtered=data.sessions.filter(s=>(mode==='all'||(mode==='templates'?s.template:!s.template&&(mode==='upcoming'?s.date>=dateToday():mode==='past'?s.date<dateToday():true)))&&norm([s.name,s.date,s.focus].join(' ')).includes(norm(q.trim()))).sort((a,b)=>b.date.localeCompare(a.date));
+  const [hall,setHall]=useState(''),[from,setFrom]=useState(''),[to,setTo]=useState(''),[maxMinutes,setMaxMinutes]=useState('');
+  const filtered=data.sessions.filter(s=>(!hall||s.hall===hall)&&(!from||s.date>=from)&&(!to||s.date<=to)&&(!maxMinutes||total(s)<=Number(maxMinutes))&&(!s.archived||mode==='archived')&&(mode==='archived'?s.archived:mode==='favorites'?s.favorite:mode==='running'?statusOf(s)==='Pågår':mode==='completed'?s.completed:(mode==='all'||(mode==='templates'?s.template:!s.template&&(mode==='upcoming'?s.date>=dateToday():mode==='past'?s.date<dateToday():true))))&&norm([s.name,s.date,s.focus,...s.items.map(i=>exercises.find(e=>e.id===i.exerciseId)?.title??'')].join(' ')).includes(norm(q.trim()))).sort((a,b)=>b.date.localeCompare(a.date));
   return <div className="page stack"><div className="heading row between wrap"><h1>Mine treninger</h1><a className="button primary" href="#/lag-trening"><Plus size={18}/> Lag trening</a></div>
-    <div className="fields"><label>Søk<input type="search" value={q} onChange={e=>set(e.target.value)} placeholder="Navn, dato eller fokus"/></label><label>Vis<select value={mode} onChange={e=>setMode(e.target.value)}><option value="all">Alle</option><option value="sessions">Treninger</option><option value="upcoming">Kommende</option><option value="past">Tidligere</option><option value="templates">Maler</option></select></label></div>
-    {!filtered.length&&<p className="panel muted">{data.sessions.length?'Ingen treff.':'De lagrede treningene dine vises her.'}</p>}
-    {filtered.map(s=><section className="panel stack" key={s.id}><div className="row between wrap"><h2>{s.name}</h2>{s.template&&<span className="chip">Mal</span>}</div><p className="row muted"><CalendarDays size={18}/> {s.date} · {s.items.length} øvelser · {total(s)} min</p>{s.focus&&<p className="muted">{s.focus}</p>}
-      <label className="check"><input type="checkbox" checked={Boolean(s.completed)} onChange={e=>update(d=>({...d,sessions:d.sessions.map(x=>x.id===s.id?{...x,completed:e.target.checked}:x)}))}/> Gjennomført</label><ShareSession session={s} team={data.team} exercises={exercises}/><div className="row wrap">{!s.template&&<a className="button primary" href={'#/trening/'+s.id}><Play size={18}/> Treningsvisning</a>}<button onClick={()=>edit(s)}>Åpne / rediger</button><button onClick={()=>edit(cloneSession(s))}>{s.template?'Bruk mal':'Kopier til ny dato'}</button>{!s.template&&<button onClick={()=>edit(cloneSession(s,true))}>Lagre som mal</button>}<button onClick={()=>{if(confirm('Slette «'+s.name+'»?'))update(d=>({...d,sessions:d.sessions.filter(x=>x.id!==s.id)}));}}>Slett</button></div>
-      {!s.template&&<details><summary>Evaluering etter trening</summary><div className="stack"><label>Hvordan fungerte treningen?<select value={s.evaluation?.rating??''} onChange={e=>update(d=>({...d,sessions:d.sessions.map(x=>x.id===s.id?{...x,evaluation:{note:x.evaluation?.note??'',rating:e.target.value}}:x)}))}><option value="">Ikke vurdert</option><option value="bra">Fungerte bra</option><option value="middels">Fungerte middels</option><option value="dårlig">Fungerte dårlig</option></select></label><label>Eget notat<textarea value={s.evaluation?.note??''} onChange={e=>update(d=>({...d,sessions:d.sessions.map(x=>x.id===s.id?{...x,evaluation:{rating:x.evaluation?.rating??'',note:e.target.value}}:x)}))}/></label></div></details>}
+    <div className="fields"><label>Søk<input type="search" value={q} onChange={e=>set(e.target.value)} placeholder="Navn, dato eller fokus"/></label><label>Vis<select value={mode} onChange={e=>setMode(e.target.value)}><option value="all">Alle</option><option value="sessions">Treninger</option><option value="upcoming">Kommende</option><option value="past">Tidligere</option><option value="templates">Maler</option><option value="running">Pågående</option><option value="completed">Gjennomførte</option><option value="archived">Arkiverte</option><option value="favorites">Favorittøkter</option></select></label></div>
+    <details className="panel"><summary>Flere treningsfiltre</summary><div className="fields"><label>Hallfilter<select value={hall} onChange={e=>setHall(e.target.value)}><option value="">Alle</option>{halls.map(h=><option key={h}>{h}</option>)}</select></label><label>Fra dato<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>Til dato<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label><label>Maks minutter<input type="number" min="1" value={maxMinutes} onChange={e=>setMaxMinutes(e.target.value)}/></label></div></details><details className="panel"><summary>Utkast ({drafts.length})</summary>{drafts.map(d=><button type="button" key={d.id} onClick={()=>edit(d)}>{d.name||'Uten navn'} · {d.date}</button>)}</details>{!filtered.length&&<p className="panel muted">{data.sessions.length?'Ingen treff.':'De lagrede treningene dine vises her.'}</p>}
+    <SessionHistory sessions={data.sessions} exercises={exercises}/>{filtered.map(s=><section className="panel stack" key={s.id}><div className="row between wrap"><h2>{s.name}</h2><span className="chip">{statusOf(s)}</span>{s.template&&<span className="chip">Mal</span>}</div><p className="row muted"><CalendarDays size={18}/> {s.date} · {s.items.length} øvelser · {total(s)} min</p>{s.focus&&<p className="muted">{s.focus}</p>}
+      <label className="check"><input type="checkbox" checked={Boolean(s.completed)} onChange={e=>update(d=>({...d,sessions:d.sessions.map(x=>x.id===s.id?{...x,completed:e.target.checked}:x)}))}/> Gjennomført</label><ShareSession session={s} team={data.team} exercises={exercises}/><div className="row wrap">{!s.template&&<a className="button primary" href={'#/trening/'+s.id}><Play size={18}/> Treningsvisning</a>}<button onClick={()=>edit(s)}>Åpne / rediger</button><button onClick={()=>edit(cloneSession(s))}>{s.template?'Bruk mal':'Kopier til ny dato'}</button>{!s.template&&<button onClick={()=>edit(cloneSession(s,true))}>Lagre som mal</button>}<button onClick={()=>update(d=>({...d,sessions:d.sessions.map(x=>x.id===s.id?{...x,archived:!x.archived}:x)}))}>{s.archived?'Gjenopprett':'Arkiver'}</button><button onClick={()=>update(d=>({...d,sessions:d.sessions.map(x=>x.id===s.id?{...x,favorite:!x.favorite}:x)}))}>{s.favorite?'Fjern øktfavoritt':'Merk øktfavoritt'}</button><button onClick={()=>{if(confirm('Slette «'+s.name+'»?'))update(d=>({...d,sessions:d.sessions.filter(x=>x.id!==s.id)}));}}>Slett</button></div>
+      {copyTo&&targets.length>0&&<label>Kopier til et annet lag<select value="" onChange={e=>{if(e.target.value)copyTo(s,e.target.value);}}><option value="">Velg lag</option>{targets.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}{!s.template&&<details><summary>Evaluering etter trening</summary><div className="stack"><label>Hvordan fungerte treningen?<select value={s.evaluation?.rating??''} onChange={e=>update(d=>({...d,sessions:d.sessions.map(x=>x.id===s.id?{...x,evaluation:{...x.evaluation,note:x.evaluation?.note??'',rating:e.target.value}}:x)}))}><option value="">Ikke vurdert</option><option value="bra">Fungerte bra</option><option value="middels">Fungerte middels</option><option value="dårlig">Fungerte dårlig</option></select></label><label>Eget notat<textarea value={s.evaluation?.note??''} onChange={e=>update(d=>({...d,sessions:d.sessions.map(x=>x.id===s.id?{...x,evaluation:{...x.evaluation,rating:x.evaluation?.rating??'',note:e.target.value}}:x)}))}/></label></div></details>}
     </section>)}
   </div>;
 }
-export function HallMode({session,exercises,data,update,quickIds,changeQuick}:{quickIds:string[];changeQuick:(ids:string[])=>void;session:Session;exercises:Exercise[];data:Data;update:(fn:(d:Data)=>Data)=>boolean}){
-  const timerKey='handball.timer.'+session.id;
-  const [planB,setPlanB]=useState('');
-  const [quick,setQuick]=useState(false);
-  const [fewer,setFewer]=useState(playerCount(session));
-  const [attendance,setAttendance]=useState(session.attendees);
-  const [useAttendance,setUseAttendance]=useState(Boolean(session.attendanceRegistered));
-  const [restored]=useState(()=>{
-    try {
-      const saved=JSON.parse(sessionStorage.getItem(timerKey)??'null');
-      const index=session.items.findIndex(item=>item.id===saved?.itemId);
-      if(index>=0 && Number.isFinite(saved.remaining) && saved.remaining>=0 && (saved.deadline===undefined||Number.isFinite(saved.deadline)))return {...saved,index};
-    }catch{/* A missing or invalid timer starts at the first exercise. */}
-    return {index:0,remaining:(session.items[0]?.minutes??0)*60,deadline:undefined};
-  });
-  const [index,setIndex]=useState<number>(restored.index);
-  const [remaining,setRemaining]=useState<number>(restored.deadline?Math.max(0,Math.ceil((restored.deadline-Date.now())/1000)):restored.remaining);
-  const [deadline,setDeadline]=useState<number|undefined>(restored.deadline);
-  useEffect(()=>{
-    try{sessionStorage.setItem(timerKey,JSON.stringify({itemId:session.items[index]?.id,remaining,deadline}));}catch{/* The timer continues when browser storage is unavailable. */}
-  },[timerKey,index,remaining,deadline,session.items]);
-  const item=session.items[index];
-  const exercise=exercises.find(e=>e.id===item?.exerciseId);
-  const next=exercises.find(e=>e.id===session.items[index+1]?.exerciseId);
-  useEffect(()=>{
-    if(deadline===undefined)return;
-    const interval=setInterval(()=>{
-      const seconds=Math.max(0,Math.ceil((deadline-Date.now())/1000));
-      setRemaining(seconds);
-      if(seconds===0)setDeadline(undefined);
-    },200);
-    return ()=>clearInterval(interval);
-  },[deadline]);
-  function go(n:number){setIndex(n);setDeadline(undefined);setRemaining((session.items[n]?.minutes??0)*60);}
-  return <div className="page detail stack">
-    <button onClick={()=>setQuick(!quick)}>5 min til overs</button>{quick&&<QuickBank ids={quickIds} exercises={exercises} change={changeQuick} favorites={data.favorites} toggle={id=>update(d=>({...d,favorites:d.favorites.includes(id)?d.favorites.filter(x=>x!==id):[...d.favorites,id]}))} use={e=>{if(confirm('Legge til '+e.title+' i fem minutter?'))update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,planBOriginal:rememberPlan(s),items:[...s.items,{...itemFor(e,5),comment:'Forkortet femminuttersgjennomføring'}]}:s)}));}}/>}<ShareSession session={session} team={data.team} exercises={exercises}/><a className="back" href="#/treninger"><ChevronLeft size={20}/> Mine treninger</a><p className="muted">{session.name} · {item?index+1:0} av {session.items.length}</p><h1>{exercise?.title??(item?'Øvelse mangler':'Treningen har ingen øvelser')}</h1>
-    {item&&<><div className="panel stack timer"><div className="row between wrap"><strong>{String(Math.floor(remaining/60)).padStart(2,'0')}:{String(remaining%60).padStart(2,'0')}</strong><span>{item.minutes} min planlagt</span></div><div className="row wrap"><button className="primary" disabled={!remaining&&deadline===undefined} onClick={()=>{if(deadline!==undefined){setRemaining(Math.max(0,Math.ceil((deadline-Date.now())/1000)));setDeadline(undefined);}else setDeadline(Date.now()+remaining*1000);}}>{deadline===undefined?(remaining<(item.minutes*60)&&remaining>0?'Fortsett':'Start'):'Pause'}</button><button onClick={()=>go(index)}>Nullstill</button>{[-5,-2,2,5].map(minutes=><button key={minutes} onClick={()=>{const seconds=Math.max(0,(deadline?Math.ceil((deadline-Date.now())/1000):remaining)+minutes*60);setRemaining(seconds);if(deadline)setDeadline(seconds?Date.now()+seconds*1000:undefined);}}>{minutes>0?'+':''}{minutes} min</button>)}</div></div>
-      {item.comment&&<p className="panel">{item.comment}</p>}
-      {exercise&&<QuickExercise e={exercise} data={data} variant={item.variant??''}/>}
-      <details className="panel"><summary>Plan B – tilpass treningen</summary><label>Hva har endret seg?<select value={planB} onChange={e=>setPlanB(e.target.value)}><option value="">Velg</option><option value="queue">For mye kø</option><option value="poor">Øvelsen fungerer dårlig</option><option value="fewer">Færre spillere</option><option value="easy">For vanskelig</option><option value="hard">For enkel</option><option value="short">10 minutter mindre</option><option value="long">10 minutter ekstra</option></select></label>
-      {(planB==='queue'||planB==='poor')&&exercise&&<>{alternatives(exercise,session,exercises).map(e=><div key={e.id}><p>{e.title} · Felles ferdighet eller kategori. Kontroller organiseringen før bytte.</p><button onClick={()=>{if(confirm('Erstatte gjeldende øvelse?'))update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,planBOriginal:rememberPlan(s),items:s.items.map(x=>x.id===item.id?{...x,exerciseId:e.id,variant:undefined}:x)}:s)}));}}>Bruk alternativ</button></div>)}<button onClick={()=>setQuick(true)}>Åpne 5 min til overs</button></>}
-      <button disabled={!session.planBOriginal} onClick={()=>{if(session.planBOriginal&&confirm('Gjenopprette planen før første Plan B-endring?')){if(update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,...s.planBOriginal,planBOriginal:undefined}:s)}))){setIndex(0);setDeadline(undefined);setRemaining(session.planBOriginal.items[0]?.minutes*60||0);}} }}>Tilbake til opprinnelig plan</button>
-      {planB==='fewer'&&<div className="stack"><label>Antall spillere nå<input type="number" min="0" value={fewer} onChange={e=>setFewer(Math.max(0,Number(e.target.value)))}/></label><label className="check"><input type="checkbox" checked={useAttendance} onChange={e=>setUseAttendance(e.target.checked)}/> Bruk valgt oppmøte i stedet for antallet</label>{useAttendance&&<Attendance data={data} selected={attendance} change={setAttendance}/>}<button onClick={()=>{if(confirm('Lagre det nye oppmøtet for denne økten?'))update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,planBOriginal:rememberPlan(s),players:fewer,attendanceRegistered:useAttendance,attendees:useAttendance?attendance:[],allocation:useAttendance?s.allocation?.map(g=>({...g,players:g.players.filter(id=>attendance.includes(id))})):undefined}:s)}));}}>Bruk nytt spillerantall</button><p>Registrert: {playerCount(session)}. Øvelsene beholdes inntil du velger et alternativ.</p>{exercise&&alternatives(exercise,{...session,players:fewer,attendanceRegistered:useAttendance,attendees:useAttendance?attendance:[]},exercises).map(e=><button key={e.id} onClick={()=>{if(confirm('Bytte til '+e.title+'?'))update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,planBOriginal:rememberPlan(s),items:s.items.map(x=>x.id===item.id?{...x,exerciseId:e.id,variant:undefined}:x)}:s)}));}}>{e.title} · {e.players?.join('–')??'Ukjent antall'} spillere</button>)}</div>}
-      {(planB==='easy'||planB==='hard')&&exercise&&<>{section(exercise,'Nivåtilpasning').filter(line=>line.toLowerCase().includes(planB==='easy'?'lettere':'vanskeligere')).map((line,i)=><div key={i}><p>{line}</p><button onClick={()=>{if(confirm('Legge denne tilpasningen til kommentaren for gjeldende øvelse?'))update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,planBOriginal:rememberPlan(s),items:s.items.map(x=>x.id===item.id?{...x,comment:[x.comment,line].filter(Boolean).join(' · ')}:x)}:s)}));}}>Bruk tilpasningen</button></div>)}</>}
-      {(planB==='short'||planB==='long')&&<><p>{planB==='short'?'Kort ned gjenstående øvelser med opptil 10 minutter, minst ett minutt per øvelse.':'Legg 10 minutter til gjeldende øvelse.'} Endringen vises i bekreftelsen.</p><button onClick={()=>{const items=adjustRemaining(session.items,index,planB==='short'?-10:10),minutes=items[index].minutes;const delta=items.reduce((n,i)=>n+i.minutes,0)-total(session);if(confirm('Endre total planlagt tid med '+delta+' minutter?')&&update(d=>({...d,sessions:d.sessions.map(s=>s.id===session.id?{...s,planBOriginal:rememberPlan(s),items}:s)}))){const seconds=Math.max(0,(deadline?Math.ceil((deadline-Date.now())/1000):remaining)+(minutes-item.minutes)*60);setRemaining(seconds);if(deadline)setDeadline(seconds?Date.now()+seconds*1000:undefined);setPlanB('');}}}>Bruk tidsendring</button></>}
-      </details>
-      <p className="muted">{next?'Neste: '+next.title:'Siste øvelse'}</p><div className="row between"><button disabled={index===0} onClick={()=>go(index-1)}><ChevronLeft size={18}/> Forrige</button><button disabled={index>=session.items.length-1} onClick={()=>go(index+1)}>Neste <ChevronRight size={18}/></button></div>
-    </>}
-  </div>;
-}
+export {SessionRunner as HallMode} from './SessionRunner';

@@ -1,7 +1,7 @@
 {
   "name": "handballtrenern",
   "private": true,
-  "version": "3.1.0",
+  "version": "3.2.0",
   "packageManager": "pnpm@11.25.0",
   "type": "module",
   "scripts": {
