@@ -4,6 +4,7 @@ export function ruleViolations(result:string[][],rules:GroupRule[]):string[]{
  const at=(id:string)=>result.findIndex(g=>g.includes(id));
  return rules.filter(r=>at(r.a)>=0&&(r.kind==='locked'?at(r.a)!==r.group:at(r.b)>=0&&(r.kind==='together'?at(r.a)!==at(r.b):at(r.a)===at(r.b)))).map(r=>r.id);
 }
+export function ruleMessages(result:string[][],rules:GroupRule[],players:Player[]){const ids=ruleViolations(result,rules),name=(id:string)=>players.find(p=>p.id===id)?.name??'Ukjent spiller';return rules.filter(r=>ids.includes(r.id)).map(r=>r.kind==='locked'?name(r.a)+' skal være på lag '+(r.group+1):name(r.a)+' og '+name(r.b)+(r.kind==='together'?' skal være på samme lag.':' skal være på forskjellige lag.'));}
 export function constrainedGroups(input:Player[],count:number,byLevel:boolean,rules:GroupRule[]):Player[][]{
  const players=input.filter(p=>!p.archived);if(!players.length)return [];
  const n=Math.max(1,Math.min(players.length,Math.floor(count)||1));

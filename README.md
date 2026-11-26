@@ -1,6 +1,6 @@
 # Håndballtrener’n
 
-Ny utviklingsrunde: [3.2.0 – fra plan til praksis](RAPPORT-3.2.0.md). Rapporten beskriver levert funksjonalitet, tester og gjenstående detaljkrav. Endringene klargjøres lokalt; publisering gjøres av eieren.
+Siste lokale kvalitetsoppdatering: [3.2.1 – kvalitet og robusthet](RAPPORT-3.2.1.md). Rapporten beskriver levert funksjonalitet, tester og gjenstående detaljkrav. Endringene klargjøres lokalt; publisering gjøres av eieren.
 
 Norsk React/TypeScript/Vite-app for håndballtrening, flere lag, SVG-øvelsesbank og offlinebruk. Appversjonen kommer kun fra package.json. Konto og ekstern KI er ikke nødvendig. Valgfri privat synkronisering er beskrevet i [SYNC.md](SYNC.md).
 

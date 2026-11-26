@@ -1,3 +1,4 @@
+import {changeAttendance,allocationSets,saveAllocation} from './sessionAttendance';
 import {constrainedGroups,ruleViolations} from './groupRules';
 import {GroupRulesEditor} from './GroupRulesEditor';
 import {useRef,useState} from 'react';
@@ -6,7 +7,7 @@ import {type Data,type Level,type Session,levels,uid,activePlayers,archivePlayer
 import {Attendance} from './Training';
 import {parseBackup,project,type Workspace} from './workspace';
 
-export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data:Data;draft:Session;setDraft:(s:Session)=>void;update:(fn:(d:Data)=>Data)=>boolean;replace:(d:Workspace)=>boolean;exportAll:()=>void;notify:(message:string)=>void}){
+export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data:Data;draft:Session;setDraft:(s:Session|((s:Session)=>Session))=>void;update:(fn:(d:Data)=>Data)=>boolean;replace:(d:Workspace)=>boolean;exportAll:()=>void;notify:(message:string)=>void}){
   const [name,setName]=useState('');
   const [query,setQuery]=useState('');
   const [sort,setSort]=useState('name');
@@ -55,7 +56,7 @@ export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data
         <input aria-label="Spillernavn" value={p.name} onChange={e=>update(d=>({...d,players:d.players.map(x=>x.id===p.id?{...x,name:e.target.value}:x)}))}/>
         <select aria-label={'Nivå for '+p.name} value={p.level} onChange={e=>{if(update(d=>({...d,players:d.players.map(x=>x.id===p.id?{...x,level:Number(e.target.value) as Level}:x)})))notify('Spiller oppdatert');}}>{levels.map((s,i)=><option key={s} value={i+1}>{i+1} · {s}</option>)}</select>
         <button onClick={()=>{if(update(d=>archivePlayer(d,p.id,!p.archived))){setSelection(selection.filter(id=>id!==p.id));setTeams([]);notify(p.archived?'Spiller gjenaktivert':'Spiller arkivert – historikken er bevart');}}}>{p.archived?'Gjenaktiver':'Arkiver'}</button>
-        {p.archived&&<button aria-label={'Slett permanent '+p.name} onClick={()=>{if(confirm('Slette '+p.name+' permanent? Navn, nivå, oppmøte og lagreferanser fjernes fra alle lagrede treninger. Eksporter en sikkerhetskopi først dersom du vil beholde historikken.')&&update(d=>deletePlayer(d,p.id))){setDraft(removeFromSession(draft,p.id));setSelection(selection.filter(id=>id!==p.id));setTeams([]);}}}>Slett permanent</button>}
+        {p.archived&&<button aria-label={'Slett permanent '+p.name} onClick={()=>{if(confirm('Slette '+p.name+' permanent? Navn, nivå, oppmøte og lagreferanser fjernes fra alle lagrede treninger. Eksporter en sikkerhetskopi først dersom du vil beholde historikken.')&&update(d=>deletePlayer(d,p.id))){setDraft(current=>removeFromSession(current,p.id));setSelection(selection.filter(id=>id!==p.id));setTeams([]);}}}>Slett permanent</button>}
       </div>)}
     </section>
     <section className="panel stack" id="team-allocation">
@@ -72,9 +73,9 @@ export function Team({data,draft,setDraft,update,replace,notify,exportAll}:{data
     <button disabled={source==='all'||ruleViolations(teams,data.groupRules??[]).length>0} onClick={()=>{
       const attendees=selection.filter(playerExists);
       const allocation=teams.map((g,i)=>({name:names[i]??'Lag '+(i+1),players:g.filter(id=>attendees.includes(id))}));
-      const patch={attendees,attendanceRegistered:true,allocation};
-      if(source==='draft'){setDraft({...draft,...patch});notify('Oppmøte og lag lagt til treningsplanen');}
-      else if(update(d=>({...d,sessions:d.sessions.map(s=>s.id===source?{...s,...patch}:s)})))notify('Oppmøte og lag lagret');
+      const apply=(current:Session)=>{const next=changeAttendance(current,attendees),previous=allocationSets(current).find(a=>a.name==='Fra Mitt lag'&&!a.approved);if(!allocation.length)return next;const set={id:previous?.id??uid(),name:'Fra Mitt lag',approved:false,groups:allocation};return {...saveAllocation(next,set),activeAllocationId:set.id};};
+      if(source==='draft'){setDraft(apply);notify('Oppmøte og lag lagt til treningsplanen');}
+      else if(update(d=>({...d,sessions:d.sessions.map(s=>s.id===source?apply(s):s)})))notify('Oppmøte og lag lagret');
     }}>Lagre til valgt trening</button>
     {source==='all'&&<p className="muted">Velg en trening under Oppmøteliste for å lagre fordelingen.</p>}
     </section>

@@ -1,0 +1,11 @@
+import {type Data,type Exercise,type Session,hallFits,section,norm,fits} from './model.ts';
+import {searchBank,editorial} from './catalog.ts';
+import {planningMeta} from './planningMeta.ts';
+import {recordedOccurrences,performed} from './sessionFlow.ts';
+export const emptyFilters={q:'',category:'',skill:'',type:'',players:'',hall:'',minutes:'',coaches:'',difficulty:'',equipment:'',favorite:false};
+export type ExerciseFilters=typeof emptyFilters;
+export function normalizeFilters(value:unknown):ExerciseFilters{const result={...emptyFilters};if(value&&typeof value==='object')for(const key of Object.keys(result) as (keyof ExerciseFilters)[]){const v=(value as Record<string,unknown>)[key];if(key==='favorite'){if(typeof v==='boolean')result.favorite=v;}else if(typeof v==='string')result[key]=v;}return result;}
+export function filteredExercises(exercises:Exercise[],filter:ExerciseFilters,data:Pick<Data,'notes'|'favorites'|'sessions'>,sort='relevance',context?:Session){
+ const lastUsed=(id:string)=>data.sessions.filter(s=>recordedOccurrences(s).some(r=>r.exerciseId===id&&performed(r))).map(s=>s.date).sort().at(-1)??'';
+ return searchBank(exercises.map(e=>({...e,...data.notes[e.id]?.metadata})),filter.q).filter(e=>{const meta=editorial(e),equipment=(planningMeta(e).equipment??section(e,'Du trenger')).join(' ');return (!context||fits(e,context))&&(!filter.category||e.categories.includes(filter.category))&&(!filter.skill||meta.skills.includes(filter.skill))&&(!filter.type||meta.types.includes(filter.type))&&(!filter.players||!e.players||Number(filter.players)>=e.players[0]&&Number(filter.players)<=e.players[1])&&(!filter.minutes||!e.minutes||Number(filter.minutes)>=e.minutes[0]&&Number(filter.minutes)<=e.minutes[1])&&(!filter.hall||hallFits(e.halls,filter.hall))&&(!filter.coaches||meta.coaches===undefined||meta.coaches<=Number(filter.coaches))&&(!filter.equipment||!equipment||norm(equipment).includes(norm(filter.equipment)))&&(!filter.difficulty||data.notes[e.id]?.difficulty===filter.difficulty)&&(!filter.favorite||data.favorites.includes(e.id));}).sort((a,b)=>sort==='name'?a.title.localeCompare(b.title,'nb'):sort==='number'?(a.number??9999)-(b.number??9999):sort==='recent'?lastUsed(b.id).localeCompare(lastUsed(a.id)):0);
+}
