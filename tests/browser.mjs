@@ -1,3 +1,4 @@
+import {quality321} from './browser-quality321.mjs';
 import {workflow320} from './browser-workflow320.mjs';
 import {testSync} from './browser-sync.mjs';
 import {auditDiagrams} from './browser-diagrams.mjs';
@@ -73,5 +74,5 @@ try{
  if(!process.env.WORKFLOW_ONLY&&!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.SYNC_ONLY)await auditDiagrams(browser,url);
  if(!process.env.WORKFLOW_ONLY&&!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY)await testSync(browser,url);
  if(!process.env.WORKFLOW_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY){await testRosters(browser,url,value=>rosterOverride=value,()=>++revision);await testActualRoster(browser,url,value=>rosterOverride=value);}
- if(process.env.WORKFLOW_ONLY||(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY))await workflow320(browser,url,()=>++revision);
+ if(process.env.WORKFLOW_ONLY||(!process.env.ROSTER_ONLY&&!process.env.V3_ONLY&&!process.env.AUDIT_ONLY&&!process.env.SYNC_ONLY)){await workflow320(browser,url,()=>++revision);await quality321(browser,url);await quality321(browser,url,1280);}
 }finally{await browser?.close();server.close();}
